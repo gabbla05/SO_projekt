@@ -3,7 +3,6 @@
 
 int main() {
 
-   printf("tomek klimek");
-   printf("hejka kochani!!!!");
+   printf("test");
    return 0;
 }
