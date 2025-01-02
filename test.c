@@ -4,6 +4,6 @@
 int main() {
 
 
-   printf("hejka kochani!!!!");
+   printf("hej");
    return 0;
 }
