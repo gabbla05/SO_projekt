@@ -1,3 +1,4 @@
+// main.c
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
@@ -8,18 +9,17 @@
 #include "kierownik.h"
 #include "utils.h"
 
-#define F 3 //liczba fryzjerów
-#define N 2 //liczba foteli
-#define K 5 //liczba miejsc w poczekalni
+#define F 3   // Liczba fryzjerów
+#define N 2   // Liczba foteli
+#define K 5   // Liczba miejsc w poczekalni
 
 pthread_mutex_t kasa_mutex;
 sem_t poczekalnia_sem;
 sem_t fotele_sem;
 
-int kasa[3] = {5,5,5}; //stan kasy 10zl, 20zl, 30zl
+int kasa[3] = {5, 5, 5};  // Stan kasy: 10zł, 20zł, 50zł
 
-int main() {
-
-   printf("test");
-   return 0;
+int main()
+{
+   
 }
