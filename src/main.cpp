@@ -12,6 +12,7 @@
 #include "utils.h"
 #include <iostream>
 #include <queue>
+#include <limits>
 
 pthread_mutex_t kasa_mutex;  
 pthread_mutex_t queue_mutex;
@@ -102,11 +103,49 @@ int main()
     int liczbaKlientow = 3, liczbaFryzjerow = 2, liczbaFoteli = 1;
     // tym mozna walidowac liczbe procesow, nie wiem czy trzeba
     int hardwareThreads = sysconf(_SC_NPROCESSORS_ONLN); 
-    //printf("THREADS COUNT: %i \n", hardwareThreads); 
-    //printf("Podaj liczbe fryzjerow: ");
-    //scanf() 
+    //std::cout << "THREADS COUNT: " << hardwareThreads << std::endl;
+    // W salonie pracuje F fryzjerów (F>1) i znajduje się w nim N foteli (N<F).
+     while (1) 
+    {  
+        std::cout << "Podaj liczbe fryzjerow (F > 1): " << std::endl;
+        std::cin >> liczbaFryzjerow;
 
-    init_resources(rozmiarPoczekalni, liczbaFoteli);
+        if (std::cin.fail() || liczbaFryzjerow <= 1) 
+        {
+            std::cout << "Blad: liczba fryzjerow musi byc wieksza od 1. Sprobuj ponownie." << std::endl;
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        } else 
+        {
+            break;  
+        }
+    }
+
+    std::cout << "Liczba fryzjerow: " << liczbaFryzjerow << std::endl;
+
+    while (1)
+    {
+        std::cout << "Podaj liczbe foteli: " << std::endl;
+        std::cin >> liczbaFoteli;
+        if (std::cin.fail() || liczbaFoteli >= liczbaFryzjerow)
+        {
+            std::cout << "Blad: liczba foteli musi byc mniejsza od liczby fryzjerow. Sprobuj ponownie." << std::endl;
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        }
+        else
+        {
+            break;
+        }
+    }
+    std::cout << "Liczba foteli: " << liczbaFoteli << std::endl;
+
+   
+    // tak samo jak dla fryzjerow
+   
+    
+
+    /*init_resources(rozmiarPoczekalni, liczbaFoteli);
 
 
     pthread_t fryzjer;
@@ -122,5 +161,6 @@ int main()
     
     // co to signal
     
-    while(1);
+    while(1);*/
+    return 0;
 }

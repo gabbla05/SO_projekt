@@ -1,19 +1,31 @@
-CC = gcc
+
+CC = g++
 CFLAGS = -Wall -pthread -g -Iinclude
+
+
 TARGET = salon
 
-SRC = src/main.c src/fryzjer.c src/klient.c src/kierownik.c src/utils.c
-HEADERS = include/fryzjer.h include/klient.h include/kierownik.h include/utils.h
 
-OBJ = $(SRC:.c=.o)
+SRC_DIR = src
+INCLUDE_DIR = include
+OBJ_DIR = obj
+
+SRC = $(wildcard $(SRC_DIR)/*.cpp)
+HEADERS = $(wildcard $(INCLUDE_DIR)/*.h)
+OBJ = $(SRC:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
+
 
 all: $(TARGET)
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJ)
 
-src/%.o: src/%.c $(HEADERS)
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(HEADERS)
+	mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+
 clean:
-	rm -f src/*.o $(TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET)
