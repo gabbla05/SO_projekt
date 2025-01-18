@@ -2,13 +2,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
+#include <signal.h>
+#include <string.h>
 
+// Flaga oznaczająca aktywność fryzjera
+volatile sig_atomic_t active = 1;
+
+
+
+// Funkcja obsługująca fryzjera
 void* fryzjer_handler(void* arg) {
     int fryzjer_id = *((int*)arg);
     free(arg);
     srand(time(NULL) + fryzjer_id);
 
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa)); // Wyzerowanie struktury
+    sa.sa_handler = handle_signal;
+
+    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+        perror("Błąd rejestracji SIGUSR1 dla fryzjera");
+        pthread_exit(NULL);
+    }
+
+
+
     while (1) {
+        // Sprawdzenie, czy fryzjer jest aktywny
+        if (!active) {
+            printf("Fryzjer %d został wyłączony z pracy.\n", fryzjer_id);
+            pthread_exit(NULL);
+        }
+
         int client_id = dequeue();
 
         if (client_id != -1) {
@@ -48,7 +74,7 @@ void* fryzjer_handler(void* arg) {
 
             sem_wait(&fotele_sem);
             printf("Fryzjer %d wykonuje usługę dla klienta %d.\n", fryzjer_id, client_id);
-            usleep(rand() % 1000000 + 1000000);
+            usleep(rand() % 1000000 + 1000000); // Symulacja czasu usługi
             sem_post(&fotele_sem);
 
             printf("Fryzjer %d zakończył obsługę klienta %d.\n", fryzjer_id, client_id);

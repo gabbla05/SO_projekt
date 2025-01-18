@@ -5,6 +5,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <signal.h>
+
 
 // Globalna kasa
 struct Kasa kasa;
@@ -13,6 +15,9 @@ int poczekalnia[MAX_QUEUE_SIZE] = {0}; // Definicja tablicy
 
 sem_t fotele_sem;
 int msg_queue_id;
+
+volatile sig_atomic_t fryzjer_active[NUM_FRYZJEROW];
+
 
 // Inicjalizacja zasobów
 void init_resources(int K, int N) {
@@ -43,6 +48,10 @@ void init_resources(int K, int N) {
     printf(" - 10 zł: %d\n", kasa.tens);
     printf(" - 20 zł: %d\n", kasa.twenties);
     printf(" - 50 zł: %d\n", kasa.fifties);
+
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        fryzjer_active[i] = 1; // Wszyscy fryzjerzy początkowo aktywni
+    }
 }
 
 // Sprzątanie zasobów
