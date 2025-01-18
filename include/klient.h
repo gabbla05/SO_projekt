@@ -6,6 +6,6 @@ struct Client {
     int money;
 };
 
-void* client_handler(void* arg);
+void* klient_handler(void* arg);
 
 #endif

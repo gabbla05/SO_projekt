@@ -1,51 +1,41 @@
-#include <stdio.h>
+#include "utils.h"
 #include <pthread.h>
+#include <stdlib.h>
 #include <unistd.h>
-#include <limits.h>
+#include <stdio.h>
 #include "fryzjer.h"
 #include "klient.h"
-#include "kierownik.h"
-#include "utils.h"
+
+#define NUM_KLIENTOW 10 // Liczba klientów
+#define NUM_FRYZJEROW 3 // Liczba fryzjerów
+#define NUM_FOTELI 2    // Liczba foteli
 
 int main() {
-    int liczbaKlientow = 3, liczbaFryzjerow = 2, liczbaFoteli = 1;
+    init_resources(10, NUM_FOTELI); // Inicjalizacja poczekalni i foteli
 
-    // Pobieranie liczby fryzjerów
-    while (1) {
-        printf("Podaj liczbę fryzjerów (F > 1): \n");
-        scanf("%d", &liczbaFryzjerow);
-        if (liczbaFryzjerow <= 1) {
-            printf("Błąd: liczba fryzjerów musi być większa od 1. Spróbuj ponownie.\n");
-        } else {
-            break;
-        }
+    pthread_t fryzjer_threads[NUM_FRYZJEROW];
+    pthread_t klient_threads[NUM_KLIENTOW];
+    int klient_ids[NUM_KLIENTOW];
+
+    // Tworzenie wątków fryzjerów
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        int* fryzjer_id = malloc(sizeof(int)); // Dynamicznie alokujemy pamięć na ID fryzjera
+        *fryzjer_id = i + 1;
+        pthread_create(&fryzjer_threads[i], NULL, fryzjer_handler, fryzjer_id);
     }
 
-    // Pobieranie liczby foteli
-    while (1) {
-        printf("Podaj liczbę foteli: \n");
-        scanf("%d", &liczbaFoteli);
-        if (liczbaFoteli >= liczbaFryzjerow || liczbaFoteli <= 0) {
-            printf("Błąd: liczba foteli musi być mniejsza od liczby fryzjerów. Spróbuj ponownie.\n");
-        } else {
-            break;
-        }
+    // Tworzenie wątków klientów
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        klient_ids[i] = i + 1;
+        pthread_create(&klient_threads[i], NULL, klient_handler, &klient_ids[i]);
+        usleep(rand() % 1000000); // Klienci przychodzą losowo
     }
 
-    init_resources(2, liczbaFoteli);
+    // Czekanie na zakończenie wątków klientów
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        pthread_join(klient_threads[i], NULL);
+    }
 
-    pthread_t fryzjer;
-    pthread_t klient;
-
-    // Tworzenie wątku dla fryzjera
-    pthread_create(&fryzjer, NULL, &fryzjer_handler, NULL);
-
-    // Tworzenie wątku dla klienta
-    struct Client client = {1, 10};
-    pthread_create(&klient, NULL, &client_handler, (void*)&client);
-
-    pthread_join(fryzjer, NULL);
-    pthread_join(klient, NULL);
-
+    cleanup_resources(); // Sprzątanie zasobów
     return 0;
 }

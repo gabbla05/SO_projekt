@@ -1,29 +1,62 @@
-#include "fryzjer.h"
 #include "utils.h"
-#include <pthread.h>
-#include <semaphore.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
-extern sem_t fotele_sem;
-extern pthread_mutex_t queue_mutex;
-extern int poczekalnia[100]; // Kolejka o stałej wielkości (można to zmienić na dynamiczną)
+void* fryzjer_handler(void* arg) {
+    int fryzjer_id = *((int*)arg);
+    free(arg);
+    srand(time(NULL) + fryzjer_id);
 
-void* fryzjer_handler(void *arg) {
-    int clientID;
-    while (1) {      
-        if (poczekalnia[0] != -1) { // Sprawdzenie, czy jest klient
-            pthread_mutex_lock(&queue_mutex);
-            clientID = poczekalnia[0];
-            poczekalnia[0] = -1; // Usuwanie klienta z kolejki
-            pthread_mutex_unlock(&queue_mutex);
+    while (1) {
+        int client_id = dequeue();
 
-            sem_wait(&fotele_sem); // Czekanie na fotel
-            // TODO: Obsługa płatności
-        } else {
-            printf("Fryzjer śpi\n");
+        if (client_id != -1) {
+            int service_cost = (rand() % 10 + 1) * 10;
+
+            int payment = 0;
+            int tens = 0, twenties = 0, fifties = 0;
+
+            // Generowanie płatności z nominałów
+            while (payment < service_cost) {
+                int nominał = rand() % 3;
+                if (nominał == 0) {
+                    payment += 10;
+                    tens++;
+                } else if (nominał == 1) {
+                    payment += 20;
+                    twenties++;
+                } else {
+                    payment += 50;
+                    fifties++;
+                }
+            }
+
+            printf("Fryzjer %d obsługuje klienta %d. Usługa kosztuje %d zł, klient płaci %d zł.\n",
+                   fryzjer_id, client_id, service_cost, payment);
+            printf("Płatność klienta %d: %d x 10 zł, %d x 20 zł, %d x 50 zł\n",
+                   client_id, tens, twenties, fifties);
+
+            // Dodanie dokładnych nominałów do kasy
+            process_payment(tens, twenties, fifties);
+
+            int change = payment - service_cost;
+            if (change > 0) {
+                printf("Fryzjer %d wydaje resztę %d zł klientowi %d.\n", fryzjer_id, change, client_id);
+                give_change(change);
+            }
+
+            sem_wait(&fotele_sem);
+            printf("Fryzjer %d wykonuje usługę dla klienta %d.\n", fryzjer_id, client_id);
             usleep(rand() % 1000000 + 1000000);
+            sem_post(&fotele_sem);
+
+            printf("Fryzjer %d zakończył obsługę klienta %d.\n", fryzjer_id, client_id);
+        } else {
+            printf("Brak klientów, fryzjer %d śpi...\n", fryzjer_id);
+            usleep(1000000);
         }
     }
+
+    return NULL;
 }
