@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 void* klient_handler(void* arg) {
