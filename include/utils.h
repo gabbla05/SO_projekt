@@ -1,22 +1,60 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
+#define _XOPEN_SOURCE 500
+
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <pthread.h>
-#include <semaphore.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
 #include <signal.h>
 
-// Stałe dla kolejki komunikatów
+// Stałe
 #define QUEUE_KEY 1234
-#define MAX_CLIENTS 100
+#define SHM_KEY 5678
+#define SEM_KEY 91011
 #define MAX_QUEUE_SIZE 10
 #define NUM_FRYZJEROW 3
+#define NUM_KLIENTOW 10
+#define POCZEKALNIA_KEY 12345
+#define FOTELE_KEY 12346
+#define MAX_FOTELE 2
+#define FRYZJER_SIGNAL_KEY 12347
+#define SLEEPING_COUNT_KEY 12348
 
-extern int poczekalnia[MAX_QUEUE_SIZE];
-extern int msg_queue_id; // Identyfikator kolejki komunikatów
-extern volatile sig_atomic_t fryzjer_active[NUM_FRYZJEROW];
+extern pid_t main_process_pid; // Deklaracja zmiennej
+extern int shm_id;
+extern int msg_queue_id;
+extern int poczekalnia_id; // Semafor dla poczekalni
+extern int fotele_id;      // Semafor dla foteli
+extern int fryzjer_signal_id;
+extern int sleeping_count_id;
+extern int* sleeping_fryzjer;
+
+
+typedef struct Queue {
+    int clients[MAX_QUEUE_SIZE];
+    int head;
+    int tail;
+    int size;
+} Queue;
+
+extern struct Queue queue; 
+
+
+// Struktura kasy
+struct Kasa {
+    int tens;
+    int twenties;
+    int fifties;
+    int fryzjer_status[NUM_FRYZJEROW]; 
+    int client_done[NUM_KLIENTOW];
+    int salon_open;
+};
+extern struct Kasa* kasa; // Deklaracja wskaźnika
 
 // Struktura wiadomości w kolejce komunikatów
 struct Message {
@@ -24,36 +62,19 @@ struct Message {
     int client_id;  // ID klienta
 };
 
-
-
-
-// Struktura kasy
-struct Kasa {
-    int tens;    // Liczba 10-złotówek
-    int twenties; // Liczba 20-złotówek
-    int fifties;  // Liczba 50-złotówek
-    pthread_mutex_t lock; // Mutex do synchronizacji dostępu
-};
-
-extern struct Kasa kasa; // Deklaracja globalnej kasy
-
-extern volatile sig_atomic_t fryzjer_active[NUM_FRYZJEROW];
-
-// Semafory
-extern sem_t poczekalnia_sem;
-extern sem_t fotele_sem;
-
-// Mutexy
-extern pthread_mutex_t queue_mutex;
-
-// Deklaracje funkcji
-void init_resources(int K, int N);
+// Funkcje do obsługi zasobów
+void init_resources();
 void cleanup_resources();
-void enqueue(int client_id);
+int enqueue(int client_id);
 int dequeue();
-int process_payment(int tens, int twenties, int fifties);
-int give_change(int amount);
-void handle_signal(int sig);
-
+void process_payment(int tens, int twenties, int fifties);
+void give_change(int amount);
+void* reap_zombies(void* arg);
+void wait_for_processes();
+void lock_semaphore();
+void unlock_semaphore();
+const char* get_process_role();
+void register_signal_handlers();
+void sigusr2_handler(int signo);
 
 #endif
