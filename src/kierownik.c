@@ -1,5 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
-#define _XOPEN_SOURCE 500
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,30 +5,26 @@
 #include <time.h>
 #include <sys/prctl.h>
 #include "utils.h"
+#include "kierownik.h"
 
-extern pid_t main_process_pid;
-
-void kierownik_handler() {
-    prctl(PR_SET_NAME, "kierownik", 0, 0, 0); // Ustaw nazwę procesu
+void kierownik_handler(pid_t fryzjer_pids[]) {
+    prctl(PR_SET_NAME, "kierownik", 0, 0, 0);
     srand(time(NULL));
-    pid_t pid = getpid(); // Pobierz PID kierownika
 
     while (1) {
-        sleep(rand() % 10 + 5); // Losowe opóźnienie
-        int sig_type = rand() % 2; // Wybór sygnału
-
-        if (sig_type == 0) {
-            // Losuj fryzjera do wyłączenia (od 1 do NUM_FRYZJEROW)
-            int fryzjer_id = rand() % NUM_FRYZJEROW + 1;
-            printf("%s [PID %d] Wysyłam SIGUSR1: Wyłączam fryzjera %d.\n", 
-                   get_process_role(), pid, fryzjer_id);
-            kill(0, SIGUSR1); // Wyłączenie fryzjera
+        sleep(rand() % 10 + 5); // Losowy czas oczekiwania od 5 do 14 sekund
+        //int action = rand() % 2;
+        sleep(2);
+        int action = 0;
+        if (action == 0) {
+            int fryzjer_id = rand() % NUM_FRYZJEROW + 1; // Losowy fryzjer od 1 do NUM_FRYZJEROW
+            printf("%s [KIEROWNIK] Wyłączam fryzjera %d.\n", get_timestamp(), fryzjer_id);
+            kill(fryzjer_pids[fryzjer_id - 1], SIGUSR1); // Wyślij sygnał tylko do wybranego fryzjera
+            break;
         } else {
-            printf("%s [PID %d] Wysyłam SIGUSR2: Zamknięcie salonu.\n", 
-                   get_process_role(), pid);
-            kill(0, SIGUSR2); // Zamknięcie salonu
-            exit(0); // Zakończenie działania kierownika
+            printf("%s [KIEROWNIK] Wszyscy klienci muszą natychmiast opuścić salon.\n", get_timestamp());
+            kill(0, SIGUSR2); // Wyślij sygnał do wszystkich procesów
+            break;
         }
     }
 }
-

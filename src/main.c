@@ -8,58 +8,51 @@
 #include <pthread.h>
 #include <sys/wait.h>
 #include <sys/prctl.h>
-
-
+#include <stdatomic.h>
+atomic_int zombie_collector_running = 1;
 pid_t main_process_pid;
-volatile int czas_do_zamkniecia = 1;
 
 void handle_signal(int sig) {
-    if (sig == SIGUSR1) {
+    if (sig == SIGUSR2) {
+        static int signal_handled = 0; // Flaga zapobiegająca wielokrotnemu wywołaniu
+        if (signal_handled) return; // Jeśli sygnał już był obsłużony, zakończ
+        signal_handled = 1;
+
         lock_semaphore();
-        for (int i = 0; i < NUM_FRYZJEROW; i++) {
-            if (kasa->fryzjer_status[i] == 1) { // Znajdź aktywnego fryzjera
-                kasa->fryzjer_status[i] = 0; // Oznacz fryzjera jako wyłączonego
-                printf("[KIEROWNIK] Otrzymano SIGUSR1: Wyłączono fryzjera %d.\n", i + 1);
-                unlock_semaphore();
-                return;
-            }
+        kasa->salon_open = 0;
+        unlock_semaphore();
+        printf("%s [KIEROWNIK] Zamknięcie salonu zostało zainicjowane.\n", get_timestamp());
+
+        // Wyślij sygnał SIGUSR2 do wszystkich klientów, aby opuścili salon
+        kill(0, SIGUSR2); // Wysyła sygnał do wszystkich procesów w grupie
+    }
+}
+
+// Funkcja wątku zbierającego zombie
+void* zombie_collector(void* arg) {
+    (void)arg; // Nieużywany argument
+    while (atomic_load(&zombie_collector_running)) {
+        // Wywołaj waitpid, aby zebrać procesy zombie
+        while (waitpid(-1, NULL, WNOHANG) > 0) {
+            // Proces zombie został zebrany
         }
-        unlock_semaphore();
-        printf("[KIEROWNIK] Otrzymano SIGUSR1, ale wszyscy fryzjerzy są już wyłączeni.\n");
-    } else if (sig == SIGUSR2) {
-        lock_semaphore();
-        kasa->salon_open = 0; // Zamykanie salonu
-        unlock_semaphore();
-        printf("[KIEROWNIK] Otrzymano SIGUSR2: Zamknięcie salonu.\n");
-        czas_do_zamkniecia = 0; // Wyłącz pętlę główną symulacji
+        sleep(1); // Odczekaj sekundę przed kolejnym sprawdzeniem
     }
+    return NULL;
 }
 
-void sprawdz_godzine() {
-    int godzina;
-    printf("Podaj aktualną godzinę (8-18): ");
-    while (scanf("%d", &godzina) != 1 || godzina < 8 || godzina > 18) {
-        printf("Błąd: Podaj godzinę w przedziale od 8 do 18: ");
-        while (getchar() != '\n'); // Wyczyść bufor
-    }
-    printf("Salon otwarty. Symulacja od godziny %d do 18.\n", godzina);
+void simulate_time(void* arg) {
+    int starting_time = *((int*)arg); // Dereference the pointer to get the starting time
 
-    int czas_pracy = 18 - godzina; // Liczba godzin do symulacji
-    printf("Salon będzie działał przez %d godzin w symulacji.\n", czas_pracy);
-    czas_do_zamkniecia = czas_pracy;
-}
-
-void symuluj_czas() {
-    for (int i = 0; i < czas_do_zamkniecia; i++) {
-        sleep(1); // Symulacja jednej godziny (1 sekunda = 1 godzina)
-        printf("[SYMUACJA] Minęła godzina %d. Do zamknięcia salonu pozostało %d godzin.\n", 8 + i, czas_do_zamkniecia - i - 1);
+    for (int i = 0; i < 18; i++) {
+        sleep(1); // Symulacja jednej godziny
+        printf("%s [SYMULACJA] Minęła godzina %d.\n",get_timestamp(), (starting_time + i)); // Dopasuj godzinę startową
     }
-    printf("[SYMUACJA] Jest godzina 18. Salon zostaje zamknięty.\n");
     kill(0, SIGUSR2); // Wyślij sygnał zamknięcia salonu
 }
 
 int main() {
-    main_process_pid = getpid(); // Ustaw PID procesu głównego
+    main_process_pid = getpid();
     srand(time(NULL));
 
     // Rejestracja obsługi sygnałów
@@ -67,80 +60,112 @@ int main() {
     sa.sa_handler = handle_signal;
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
-
-    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-        perror("Błąd rejestracji SIGUSR1");
-        exit(EXIT_FAILURE);
-    }
-
     if (sigaction(SIGUSR2, &sa, NULL) == -1) {
         perror("Błąd rejestracji SIGUSR2");
         exit(EXIT_FAILURE);
     }
 
-    printf("Obsługa sygnałów została zarejestrowana.\n");
+    printf("Podaj aktualną godzinę (8-18): ");
+    int hour;
+    scanf("%d", &hour);
+    if (hour < 8 || hour > 18) {
+        printf("Nieprawidłowa godzina. Salon działa od 8 do 18.\n");
+        exit(EXIT_FAILURE);
+    }
 
-    sprawdz_godzine(); // Pobierz godzinę od użytkownika
+    printf("%s Salon otwarty. Symulacja od godziny %d do 18.\n",get_timestamp(), hour);
 
-    // Inicjalizacja zasobów
     init_resources();
 
-    // Tworzenie wątku do usuwania procesów zombie
-    pthread_t zombie_thread;
-    if (pthread_create(&zombie_thread, NULL, reap_zombies, NULL) != 0) {
-        perror("Błąd tworzenia wątku zombie");
+    // Symulacja czasu pracy salonu
+    int starting_time = hour;
+
+    /* pthread_t time_thread;
+    if (pthread_create(&time_thread, NULL, (void*)simulate_time, (void*)&starting_time) != 0) {
+        perror("Błąd tworzenia wątku symulacji czasu");
         exit(EXIT_FAILURE);
+    }*/
+
+    pthread_t zombie_thread;
+    if (pthread_create(&zombie_thread, NULL, zombie_collector, NULL) != 0) {
+        perror("Błąd tworzenia wątku zbierającego zombie");
+        exit(EXIT_FAILURE);
+        
+    }
+
+    pid_t fryzjer_pids[NUM_FRYZJEROW];
+
+
+    // Tworzenie procesów fryzjerów
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        fryzjer_pids[i] = fork();
+        if (fryzjer_pids[i] == 0) {
+            fryzjer_handler(i + 1);
+            exit(0);
+        }
     }
 
     // Tworzenie procesu kierownika
     pid_t kierownik_pid = fork();
     if (kierownik_pid == 0) {
-        prctl(PR_SET_NAME, "kierownik");
-        kierownik_handler();
+        kierownik_handler(fryzjer_pids);
         exit(0);
-    } else if (kierownik_pid < 0) {
-        perror("Błąd tworzenia procesu kierownika");
-        exit(EXIT_FAILURE);
-    }
-
-    // Tworzenie procesów fryzjerów
-    pid_t fryzjer_pids[NUM_FRYZJEROW];
-    for (int i = 0; i < NUM_FRYZJEROW; i++) {
-        printf("[MAIN] Tworzenie procesu fryzjera %d...\n", i + 1);
-        fryzjer_pids[i] = fork();
-        if (fryzjer_pids[i] == 0) {
-            prctl(PR_SET_NAME, "fryzjer");
-            fryzjer_handler(i + 1);
-            exit(0);
-        } else if (fryzjer_pids[i] < 0) {
-            perror("Błąd tworzenia procesu fryzjera");
-            exit(EXIT_FAILURE);
-        }
     }
 
     // Tworzenie procesów klientów
     for (int i = 0; i < NUM_KLIENTOW; i++) {
         pid_t klient_pid = fork();
         if (klient_pid == 0) {
-            prctl(PR_SET_NAME, "klient");
             klient_handler(i + 1);
             exit(0);
-        } else if (klient_pid < 0) {
-            perror("Błąd tworzenia procesu klienta");
-            exit(EXIT_FAILURE);
         }
-        usleep(rand() % 500000); // Klienci przychodzą w losowych odstępach czasu
+        usleep(100000); // Opóźnienie między klientami
     }
 
-    // Symulacja czasu pracy salonu
-    symuluj_czas();
+    // Czekaj na zakończenie wątku symulacji czasu
+    //pthread_join(time_thread, NULL);
 
-    // Czekanie na zakończenie wszystkich procesów
-    wait_for_processes();
+    atomic_store(&zombie_collector_running, 0); // Zatrzymaj wątek
+    pthread_join(zombie_thread, NULL);
 
-    // Sprzątanie zasobów
-    cleanup_resources();
-    printf("Salon został zamknięty.\n");
+
+    while(1){
+        int switcher;
+        scanf("%d", &switcher);
+        switch(switcher){
+            case 1: {
+                // Wyślij sygnał SIGUSR1 do losowego fryzjera
+                int fryzjer_id = rand() % NUM_FRYZJEROW; // Losowy fryzjer od 0 do NUM_FRYZJEROW - 1
+                printf("%s [KIEROWNIK] Wysyłam sygnał SIGUSR1 do fryzjera %d.\n", get_timestamp(), fryzjer_id + 1);
+                kill(fryzjer_pids[fryzjer_id], SIGUSR1);
+                break;
+            }
+            case 2: {
+                // Wyślij sygnał SIGUSR2 (zamknij salon)
+                printf("%s [KIEROWNIK] Wysyłam sygnał SIGUSR2 (zamknięcie salonu).\n", get_timestamp());
+                kill(0, SIGUSR2); // Wyślij sygnał do wszystkich procesów
+                break;
+            }
+            case 3: {
+                // Wyjdź z programu
+                cleanup_resources(); // Sprzątanie zasobów po zakończeniu pracy
+                printf("Salon został zamknięty.\n");
+                return 0;
+            }
+            default:
+                printf("Nieprawidłowa opcja. Wybierz ponownie.\n");
+                break;
+        }
+    }
+
+        // Czekaj na zakończenie procesów fryzjerów i klientów
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        waitpid(fryzjer_pids[i], NULL, 0);
+    }
+
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        wait(NULL); // Czekanie na klientów
+    }
 
     return 0;
 }
