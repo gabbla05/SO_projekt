@@ -12,6 +12,8 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <string.h>
+#include <sys/time.h>
 
 int poczekalnia_id, fotele_id, fryzjer_signal_id;
 int msg_queue_id; // Define msg_queue_id
@@ -20,16 +22,20 @@ struct Kasa* kasa;
 int shm_id; //id pam dz
 
 
+
 // Funkcja do generowania znacznika czasu
 const char* get_timestamp() {
-    static char buffer[80]; // Statyczny bufor, aby zachować wartość po wyjściu z funkcji
-    time_t now;
+    static char buffer[80];
+    struct timeval now;
     struct tm *timeinfo;
 
-    time(&now);
-    timeinfo = localtime(&now);
+    gettimeofday(&now, NULL);
+    timeinfo = localtime(&now.tv_sec);
 
-    strftime(buffer, sizeof(buffer), "[%Y-%m-%d %H:%M:%S]", timeinfo);
+    // Format the time with milliseconds
+    strftime(buffer, sizeof(buffer), "[%Y-%m-%d %H:%M:%S", timeinfo);
+    snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), ".%03ld]", now.tv_usec / 1000);
+
     return buffer;
 }
 

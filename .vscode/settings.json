@@ -46,6 +46,8 @@
         "streambuf": "cpp",
         "typeinfo": "cpp",
         "pthread.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "stdatomic.h": "c",
+        "prctl.h": "c"
     }
 }

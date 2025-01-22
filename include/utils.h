@@ -7,7 +7,7 @@
 #include <sys/shm.h>
 
 #define NUM_FRYZJEROW 3
-#define NUM_KLIENTOW 20
+#define NUM_KLIENTOW 40
 #define MAX_QUEUE_SIZE 10
 
 #define SHM_KEY ftok("/tmp", 'S')
@@ -29,7 +29,7 @@ struct Kasa {
     int tens;
     int twenties;
     int fifties;
-    int client_done[NUM_KLIENTOW];
+    char client_done[NUM_KLIENTOW];
 };
 
 struct Queue {
@@ -42,6 +42,7 @@ struct Queue {
 struct Message {
     long mtype; // Typ komunikatu (identyfikator fryzjera)
     int client_id; // ID klienta
+    int client_pid;
 };
 
 
