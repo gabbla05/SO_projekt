@@ -99,9 +99,9 @@ void cleanup_resources() {
         perror("Błąd usuwania semafora poczekalni");
     }
 
-    /*if (semctl(fotele_id, 0, IPC_RMID) == -1) {
+    if (semctl(fotele_id, 0, IPC_RMID) == -1) {
         perror("Błąd usuwania semafora foteli");
-    }*/
+    }
 
     if (semctl(fryzjer_signal_id, 0, IPC_RMID) == -1) {
         perror("Błąd usuwania semafora fryzjera");
