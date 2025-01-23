@@ -11,6 +11,11 @@
 void handle_sigusr2(int sig) {
     if (sig == SIGUSR2) {
         printf("%s [KLIENT %d] Otrzymałem sygnał do natychmiastowego opuszczenia salonu.\n", get_timestamp(), getpid());
+
+        // Zwolnij miejsce w poczekalni, jeśli klient je zajmował
+        struct sembuf zwolnij_miejsce = {0, 1, 0};
+        semop(poczekalnia_id, &zwolnij_miejsce, 1);
+
         exit(0); // Klient natychmiast opuszcza salon
     }
 }

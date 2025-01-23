@@ -7,10 +7,10 @@
 #include <sys/shm.h>
 
 #define NUM_FRYZJEROW 3
-#define NUM_KLIENTOW 40
-#define MAX_QUEUE_SIZE 10
+#define NUM_KLIENTOW 10
+#define MAX_QUEUE_SIZE 3
 #define NUM_FOTELE 2
-#define SHM_KEY ftok("/tmp/shmfile", 'S')
+#define SHM_KEY 153271
 #define SEM_KEY 5678
 #define POCZEKALNIA_KEY 91011
 #define FOTELE_KEY 121314
@@ -32,7 +32,7 @@ struct Kasa {
     int fifties;
     char client_done[NUM_KLIENTOW];
     int client_on_chair[NUM_FOTELE];
-   // int continueFlag; // Dodane pole do synchronizacji
+    int continueFlag;
 };
 
 struct Queue {

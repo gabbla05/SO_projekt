@@ -66,6 +66,7 @@ void init_resources() {
     kasa->tens = 10;
     kasa->twenties = 5;
     kasa->fifties = 2;
+    kasa->continueFlag = 0;
     for (int i = 0; i < NUM_KLIENTOW; i++) {
         kasa->client_done[i] = 0;
     }    

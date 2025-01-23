@@ -91,11 +91,30 @@ void fryzjer_handler(int fryzjer_id) {
         printf("%s [FRYZJER %d] Rozpoczynam obsługę klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
         usleep(rand() % 1000000 + 1000000); // Symulacja czasu obsługi
 
-        printf("hehe");
-        if(continueFlag == 1) {
-            continue;
-            printf("SRAKAXD");
+        // Symulacja czasu obsługi z regularnym sprawdzaniem flagi continueFlag
+        int time_elapsed = 0;
+        int total_time = rand() % 1000000 + 1000000; // Całkowity czas obsługi
+        while (time_elapsed < total_time) {
+            usleep(100000); // Czekaj 100 ms
+            time_elapsed += 100000;
+
+            // Sprawdź, czy klient został przerwany sygnałem SIGUSR2
+            lock_semaphore();
+            if (kasa->continueFlag == 1) {
+                unlock_semaphore();
+                printf("%s [FRYZJER %d] Klient %d został przerwany sygnałem SIGUSR2. Przerywam obsługę.\n", get_timestamp(), fryzjer_id, client_pid);
+                break; // Przerwij obsługę klienta
+            }
+            unlock_semaphore();
         }
+
+        // Jeśli klient został przerwany, zakończ obsługę
+        lock_semaphore();
+        if (kasa->continueFlag == 1) {
+            unlock_semaphore();
+            continue; // Przerwij obsługę klienta
+        }
+        unlock_semaphore();
         
         // Generowanie kosztu usługi i płatności
         int cost = (rand() % 8 + 3) * 10;
