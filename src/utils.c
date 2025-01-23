@@ -20,7 +20,7 @@ int msg_queue_id; // Define msg_queue_id
 struct Queue queue = { .head = 0, .tail = 0, .size = 0 };
 struct Kasa* kasa;
 int shm_id; //id pam dz
-
+int continueFlag = 0;
 
 
 // Funkcja do generowania znacznika czasu
@@ -68,6 +68,9 @@ void init_resources() {
     kasa->fifties = 2;
     for (int i = 0; i < NUM_KLIENTOW; i++) {
         kasa->client_done[i] = 0;
+    }    
+    for (int i = 0; i < NUM_FOTELE; i++) {
+        kasa->client_on_chair[i] = 0;  // Inicjalizacja pól client_on_chair
     }
 
     poczekalnia_id = semget(POCZEKALNIA_KEY, 1, IPC_CREAT | 0666);
@@ -95,9 +98,9 @@ void cleanup_resources() {
         perror("Błąd usuwania semafora poczekalni");
     }
 
-    if (semctl(fotele_id, 0, IPC_RMID) == -1) {
+    /*if (semctl(fotele_id, 0, IPC_RMID) == -1) {
         perror("Błąd usuwania semafora foteli");
-    }
+    }*/
 
     if (semctl(fryzjer_signal_id, 0, IPC_RMID) == -1) {
         perror("Błąd usuwania semafora fryzjera");

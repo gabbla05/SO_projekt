@@ -9,8 +9,8 @@
 #define NUM_FRYZJEROW 3
 #define NUM_KLIENTOW 40
 #define MAX_QUEUE_SIZE 10
-
-#define SHM_KEY ftok("/tmp", 'S')
+#define NUM_FOTELE 2
+#define SHM_KEY ftok("/tmp/shmfile", 'S')
 #define SEM_KEY 5678
 #define POCZEKALNIA_KEY 91011
 #define FOTELE_KEY 121314
@@ -22,6 +22,7 @@ extern int poczekalnia_id, fotele_id, fryzjer_signal_id;
 extern int msg_queue_id;
 extern struct Queue queue;
 extern struct Kasa* kasa;
+extern int continueFlag;
 
 
 struct Kasa {
@@ -30,6 +31,8 @@ struct Kasa {
     int twenties;
     int fifties;
     char client_done[NUM_KLIENTOW];
+    int client_on_chair[NUM_FOTELE];
+   // int continueFlag; // Dodane pole do synchronizacji
 };
 
 struct Queue {

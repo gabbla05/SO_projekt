@@ -1,4 +1,3 @@
-
 #include "fryzjer.h"
 #include "utils.h"
 #include <stdio.h>
@@ -43,13 +42,13 @@ void fryzjer_handler(int fryzjer_id) {
         lock_semaphore();
         if (kasa->salon_open == 0) {
             unlock_semaphore();
-            printf("%s [FRYZJER %d] Salon jest zamknięty. Kończę pracę.\n",get_timestamp(), fryzjer_id);
+            printf("%s [FRYZJER %d] Salon jest zamknięty. Kończę pracę.\n", get_timestamp(), fryzjer_id);
             exit(0);
         }
         unlock_semaphore();
 
         // Oczekiwanie na klienta w poczekalni
-        printf("%s [FRYZJER %d] Oczekuję na klienta w poczekalni.\n",get_timestamp(), fryzjer_id);
+        printf("%s [FRYZJER %d] Oczekuję na klienta w poczekalni.\n", get_timestamp(), fryzjer_id);
         if (msgrcv(msg_queue_id, &message, sizeof(message) - sizeof(long), 1, 0) == -1) {
             if (errno == EINTR) continue; // Ignoruj przerwania sygnałami
             perror("[FRYZJER] Błąd odbioru komunikatu");
@@ -58,7 +57,7 @@ void fryzjer_handler(int fryzjer_id) {
 
         int client_id = message.client_id;
         int client_pid = message.client_pid;
-        printf("%s [FRYZJER %d] Obsługuję klienta %d.\n",get_timestamp(), fryzjer_id, client_pid);
+        printf("%s [FRYZJER %d] Obsługuję klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
 
         struct sembuf zwolnij_miejsce = {0, 1, 0};
         if (semop(poczekalnia_id, &zwolnij_miejsce, 1) == -1) {
@@ -75,11 +74,30 @@ void fryzjer_handler(int fryzjer_id) {
             perror("[FRYZJER] Błąd zajmowania fotela");
             break; // Wyjdź z pętli w przypadku innych błędów
         }
+
+        // Zaktualizuj pamięć współdzieloną: klient zajmuje fotel
+        lock_semaphore();
+        for (int i = 0; i < NUM_FOTELE; i++) {
+            if (kasa->client_on_chair[i] == 0) { // Znajdź wolny fotel
+                kasa->client_on_chair[i] = client_pid; // Zajmij fotel przez klienta
+                break;
+            }
+        }
+        unlock_semaphore();
+
         printf("%s [FRYZJER %d] Zajęto fotel dla klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
 
-        printf("%s [FRYZJER %d] Rozpoczynam obsługę klienta %d.\n",get_timestamp(), fryzjer_id, client_pid);
-        usleep(rand() % 1000000 + 1000000);
+        // Rozpoczęcie obsługi klienta
+        printf("%s [FRYZJER %d] Rozpoczynam obsługę klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
+        usleep(rand() % 1000000 + 1000000); // Symulacja czasu obsługi
 
+        printf("hehe");
+        if(continueFlag == 1) {
+            continue;
+            printf("SRAKAXD");
+        }
+        
+        // Generowanie kosztu usługi i płatności
         int cost = (rand() % 8 + 3) * 10;
         int payment = 0, tens = 0, twenties = 0, fifties = 0;
 
@@ -97,28 +115,41 @@ void fryzjer_handler(int fryzjer_id) {
             }
         }
 
-        printf("%s [FRYZJER %d] Klient %d zapłacił %d zł za usługę kosztującą %d zł.\n",get_timestamp(), fryzjer_id, client_pid, payment, cost);
+        printf("%s [FRYZJER %d] Klient %d zapłacił %d zł za usługę kosztującą %d zł.\n", get_timestamp(), fryzjer_id, client_pid, payment, cost);
 
+        // Przetwarzanie płatności
         lock_semaphore();
         process_payment(tens, twenties, fifties);
         unlock_semaphore();
 
+        // Wydanie reszty
         int change = payment - cost;
         if (change > 0) {
-            printf("%s [FRYZJER %d] Wydaję resztę: %d zł.\n",get_timestamp(), fryzjer_id, change);
+            printf("%s [FRYZJER %d] Wydaję resztę: %d zł.\n", get_timestamp(), fryzjer_id, change);
             give_change(change);
         }
 
+        // Zwolnienie fotela
         struct sembuf zwolnij_fotel = {0, 1, 0};
         if (semop(fotele_id, &zwolnij_fotel, 1) == -1) {
             perror("[FRYZJER] Błąd zwalniania fotela");
         }
 
+        // Zaktualizuj pamięć współdzieloną: klient opuszcza fotel
         lock_semaphore();
-        kasa->client_done[client_id] = 1; // Ustaw flagę, że klient został obsłużony
-        //sleep(3);
+        for (int i = 0; i < NUM_FOTELE; i++) {
+            if (kasa->client_on_chair[i] == client_pid) { // Znajdź fotel zajęty przez klienta
+                kasa->client_on_chair[i] = 0; // Zwolnij fotel
+                break;
+            }
+        }
         unlock_semaphore();
 
-        printf("%s [FRYZJER %d] Klient %d obsłużony, fotel zwolniony.\n",get_timestamp(), fryzjer_id, client_pid);
+        // Oznaczenie klienta jako obsłużonego
+        lock_semaphore();
+        kasa->client_done[client_id] = 1; // Ustaw flagę, że klient został obsłużony
+        unlock_semaphore();
+
+        printf("%s [FRYZJER %d] Klient %d obsłużony, fotel zwolniony.\n", get_timestamp(), fryzjer_id, client_pid);
     }
 }
