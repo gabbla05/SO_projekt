@@ -12,8 +12,19 @@ void kierownik_handler(pid_t fryzjer_pids[]) {
     srand(time(NULL));
 
     while (1) {
-        int action = 1;
-        sleep(3);
+        // Sprawdź, czy salon jest otwarty
+        lock_semaphore();
+        int salon_otwarty = kasa->salon_open;
+        unlock_semaphore();
+
+        if (!salon_otwarty) {
+            printf("%s [KIEROWNIK] Salon jest zamknięty. Czekam na otwarcie.\n", get_timestamp());
+            sleep(1); // Czekaj 1 sekundę przed kolejnym sprawdzeniem
+            continue;
+        }
+
+        int action = rand() % 2;
+        sleep(10);
         if (action == 0) {
             // Wyślij sygnał SIGUSR1 do losowego fryzjera
             int fryzjer_id = rand() % NUM_FRYZJEROW + 1; // Losowy fryzjer od 1 do NUM_FRYZJEROW
@@ -34,9 +45,11 @@ void kierownik_handler(pid_t fryzjer_pids[]) {
             }
 
             // Wymuś opuszczenie salonu przez klientów na fotelach
+            
             printf("%s [KIEROWNIK] Wymuszanie opuszczenia salonu przez klientów na fotelach.\n", get_timestamp());
-
+            //printf("%s [DEBUG KIEROWNIK] PRZED LOCK_SEMAPHORE (WYMUSZENIE OPUSZCZENIA SALONU)\n", get_timestamp());
             lock_semaphore(); // Zablokuj dostęp do pamięci współdzielonej
+            //printf("%s [DEBUG KIEROWNIK] PO LOCK_SEMAPHORE (WYMUSZENIE OPUSZCZENIA SALONU)\n", get_timestamp());
             kasa->continueFlag = 1; // Ustaw flagę continueFlag
             for (int i = 0; i < NUM_FOTELE; i++) {
                 if (kasa->client_on_chair[i] != 0) { // Jeśli fotel jest zajęty
@@ -46,8 +59,9 @@ void kierownik_handler(pid_t fryzjer_pids[]) {
                     kasa->client_on_chair[i] = 0; // Zwolnij fotel
                 }
             }
+            //printf("%s [DEBUG KIEROWNIK] PRZED LOCK_SEMAPHORE (WYMUSZENIE OPUSZCZENIA SALONU)\n", get_timestamp());
             unlock_semaphore(); // Odblokuj dostęp do pamięci współdzielonej
-
+            //printf("%s [DEBUG KIEROWNIK] PO UNLOCK_SEMAPHORE (WYMUSZENIE OPUSZCZENIA SALONU)\n", get_timestamp());
             // Zwolnij semafor foteli
             printf("%s [KIEROWNIK] Zwolnienie wszystkich foteli.\n", get_timestamp());
             semctl(fotele_id, 0, SETVAL, NUM_FOTELE); // Ustaw semafor na maksymalną liczbę foteli
@@ -55,9 +69,9 @@ void kierownik_handler(pid_t fryzjer_pids[]) {
             // Wyczyść kolejkę komunikatów (bez usuwania jej)
             printf("%s [KIEROWNIK] Kolejka komunikatów została wyczyszczona.\n", get_timestamp());
 
-            break; // Zakończ pętlę po wykonaniu akcji
+            //break; // Zakończ pętlę po wykonaniu akcji
         }
 
-        break; // Zakończ pętlę po wykonaniu jednej akcji
+        //break; // Zakończ pętlę po wykonaniu jednej akcji
     }
 }

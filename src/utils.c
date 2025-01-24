@@ -78,7 +78,10 @@ void init_resources() {
     fotele_id = semget(FOTELE_KEY, 1, IPC_CREAT | 0666);
     fryzjer_signal_id = semget(FRYZJER_SIGNAL_KEY, 1, IPC_CREAT | 0666);
     msg_queue_id = msgget(MSG_QUEUE_KEY, IPC_CREAT | 0666);
-
+    if (msg_queue_id == -1) {
+        perror("Błąd tworzenia kolejki komunikatów");
+        exit(EXIT_FAILURE);
+    }
     if (poczekalnia_id == -1 || fotele_id == -1 || fryzjer_signal_id == -1 || msg_queue_id == -1) {
         perror("Błąd tworzenia semaforów lub kolejki komunikatów");
         exit(EXIT_FAILURE);
@@ -169,3 +172,68 @@ void give_change(int amount) {
     unlock_semaphore();
 }
 
+void close_salon(pid_t fryzjer_pids[], pid_t klient_pids[]) {
+    printf("%s [SYSTEM] Godzina 18:00. Zamykanie salonu.\n", get_timestamp());
+
+    // Ustaw flagę salon_open na 0
+    lock_semaphore();
+    kasa->salon_open = 0;
+    unlock_semaphore();
+
+    // Wyślij sygnał SIGUSR1 do wszystkich fryzjerów, aby zakończyli pracę
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        kill(fryzjer_pids[i], SIGUSR1);
+    }
+
+    // Wyślij sygnał SIGUSR2 do wszystkich klientów, aby zakończyli pracę
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        kill(klient_pids[i], SIGUSR2);
+    }
+
+    // Poczekaj na zakończenie wszystkich procesów
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        waitpid(fryzjer_pids[i], NULL, 0);
+    }
+
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        waitpid(klient_pids[i], NULL, 0);
+    }
+
+    printf("%s [SYSTEM] Salon zamknięty. Wszystkie procesy zakończone.\n", get_timestamp());
+}
+
+void open_salon(pid_t fryzjer_pids[], pid_t klient_pids[]) {
+    printf("%s [SYSTEM] Godzina 8:00. Otwieranie salonu.\n", get_timestamp());
+
+    // Ustaw flagę salon_open na 1
+    lock_semaphore();
+    kasa->salon_open = 1;
+    unlock_semaphore();
+
+    // Tworzenie procesów fryzjerów
+    /*for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        fryzjer_pids[i] = fork();
+        if (fryzjer_pids[i] == 0) {
+            fryzjer_handler(i + 1);
+            exit(0);
+        }
+    }
+
+    // Tworzenie procesu kierownika
+    pid_t kierownik_pid = fork();
+    if (kierownik_pid == 0) {
+        kierownik_handler(fryzjer_pids);
+        exit(0);
+    }
+
+    // Tworzenie procesów klientów
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        klient_pids[i] = fork();
+        if (klient_pids[i] == 0) {
+            klient_handler(i + 1);
+            exit(0);
+        }
+        usleep(100000); // Opóźnienie między klientami
+    }*/
+   printf("%s [SYSTEM] Salon otwarty. Procesy wznawiają działanie.\n", get_timestamp());
+}

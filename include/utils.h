@@ -59,5 +59,7 @@ int dequeue();
 void process_payment(int tens, int twenties, int fifties);
 void give_change(int amount);
 void* zombie_collector(void* arg);
+void close_salon(pid_t fryzjer_pids[], pid_t klient_pids[]);
+void open_salon(pid_t fryzjer_pids[], pid_t klient_pids[]);
 
 #endif
