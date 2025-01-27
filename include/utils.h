@@ -42,12 +42,28 @@ struct Queue {
     int size;
 };
 
-struct Message {
-    long mtype; // Typ komunikatu (identyfikator fryzjera)
-    int client_id; // ID klienta
-    int client_pid;
+struct message {
+    unsigned long mtype; 
+    unsigned long pid;
 };
 
+int createMessageQueue(key_t key);
+void deleteMessageQueue(int msg_queue_id);
+void recieveMessage(int msg_queue_id, struct message *msg, long receiver);
+void sendMessage(int msg_queue_id, struct message* msg);
+
+int createSharedMemory(key_t key);
+int *attachSharedMemory(int shm_id);
+void detachSharedMemory(int *kasa);
+void deleteSharedMemory(int shm_id);
+
+int createSemaphore(key_t key);
+void deleteSemaphore(int sem_id);
+void setSemaphore(int sem_id, int max_value);
+void increaseSemaphore(int sem_id, int a);
+void decreaseSemaphore(int sem_id, int a);
+void decreaseSemaphoreNowait(int sem_id, int a);
+int semaphoreValue(int sem_id);
 
 const char* get_timestamp();
 void lock_semaphore();

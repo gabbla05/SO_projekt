@@ -8,6 +8,18 @@
 #include <errno.h>
 #include <signal.h>
 
+
+/* dodac flagi
+    reaguje na sygnal 1
+    odbiera komunikat o kliencie w poczekalni
+    zajmuje fotel
+    oblicza cene 
+    odbiera zaplate
+    obsluga
+    zwalnia fotel
+    wydaje reszte lub czeka
+    zwalnia zasoby na koncu
+ */
 extern int fotele_id;
 extern int fryzjer_signal_id;
 extern struct Kasa* kasa;
@@ -145,7 +157,7 @@ void fryzjer_handler(int fryzjer_id) {
 
         // Symulacja czasu obsługi z regularnym sprawdzaniem flagi continueFlag
         int time_elapsed = 0;
-        int total_time = rand() % 1000000 + 1000000; // Całkowity czas obsługi
+        int total_time = 10;
         while (time_elapsed < total_time) {
             usleep(100000); // Czekaj 100 ms
             time_elapsed += 100000;

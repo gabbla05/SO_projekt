@@ -22,6 +22,10 @@ struct Kasa* kasa;
 int shm_id; //id pam dz
 int continueFlag = 0;
 
+/* funkcje do kolejki komunikatow, 
+   funckje do pamieci dzielonej
+    funkcje do semaforow */
+
 
 // Funkcja do generowania znacznika czasu
 const char* get_timestamp() {
@@ -48,28 +52,180 @@ void unlock_semaphore() {
     struct sembuf sops = {0, 1, 0};
     semop(SEM_KEY, &sops, 1);
 }
+// FUNKCJE DO KOLEJKI KOMUNIKATOW ===========================================================================
+int createMessageQueue(key_t key) {
+    int msg_queue_id;
 
-void init_resources() {
-    shm_id = shmget(SHM_KEY, sizeof(struct Kasa), IPC_CREAT | 0666);
-    if (shm_id == -1) {
-        perror("Błąd tworzenia pamięci współdzielonej dla kasy.");
+    if((msg_queue_id = msgget(key, IPC_CREAT | 0600)) == -1) {
+        perror("Blad tworzenia kolejki komunikatow.");
         exit(EXIT_FAILURE);
     }
+    return msg_queue_id;
+}
 
+void deleteMessageQueue(int msg_queue_id) {
+    if (msgctl(msg_queue_id, IPC_RMID, NULL) == -1) {
+        perror("Blad usuwania kolejki komunikatow.");
+    }
+}
+
+void recieveMessage(int msg_queue_id, struct message *msg, long receiver) {
+    int result = msgrcv(msg_queue_id, (struct msgbuf *)msg, sizeof(struct message) - sizeof(long), receiver, 0);
+    if (result == -1) { 
+        if(errno == EINTR) {
+            recieveMessage(msg_queue_id, msg, receiver);
+        } else {
+            perror("Blad odczytywania komunikatu z kolejki komunikatow.");
+            exit(EXIT_FAILURE);
+        }
+    }  
+}
+
+void sendMessage(int msg_queue_id, struct message* msg) {
+    int result = msgsnd(msg_queue_id, (struct msgbuf *)msg, sizeof(struct message) - sizeof(long), 0);
+    if (result == -1) { 
+        if(errno == EINTR) {
+            sendMessage(msg_queue_id, msg);
+        } else {
+            perror("Blad wysylania komunikatu do kolejki komunikatow.");
+            exit(EXIT_FAILURE);
+        }
+    }  
+}
+
+// FUNKCJE DO PAMIECI WSPOLDZIELONEJ ======================================================================
+int createSharedMemory(key_t key) {
+    int shm_id = shmget(key, sizeof(struct Kasa), IPC_CREAT | 0600);
+    if (shm_id == -1) {
+        perror("Blad tworzenia pamieci wspoldzielonej dla kasy.");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int *attachSharedMemory(int shm_id) {
     kasa = shmat(shm_id, NULL, 0);
     if (kasa == (void*)-1) {
-        perror("Błąd dołączania pamięci współdzielonej dla kasy");
+        perror("Blad dolaczania pamieci wspoldzielonej dla kasy");
         exit(EXIT_FAILURE);
     }
+}
+
+void detachSharedMemory(int *kasa) {
+    if (shmdt(kasa) == -1) {
+        perror("Blad odlaczania pamieci wspoldzielonej dla kasy");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void deleteSharedMemory(int shm_id) {
+    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+        perror("Błąd usuwania pamięci współdzielonej dla kasy");
+        exit(EXIT_FAILURE);
+    }
+}
+
+// FUNKCJE DO SEMAFOROW ==================================================================
+int createSemaphore(key_t key) {
+    int sem_id = semget(key, 1, 0600 | IPC_CREAT);
+    if (sem_id == -1) {
+        perror("Blad tworzenia semafora.");
+        exit(EXIT_FAILURE);
+    }
+    return sem_id;
+}
+
+void deleteSemaphore(int sem_id) {
+    int result = semctl(sem_id, 0, IPC_RMID);
+    if (result == -1) {
+        perror("Blad usuwania semafora.");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void setSemaphore(int sem_id, int max_value) {
+    int result = semctl(sem_id, 0, SETVAL, max_value);
+    if(result == -1) {
+        perror("Blad ustawiania semafora.");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void increaseSemaphore(int sem_id, int a) {
+    struct sembuf semOperation;
+    semOperation.sem_num = 0;
+    semOperation.sem_op = a;
+    semOperation.sem_flg = 0;
+    int result = semop(sem_id, &semOperation, 1);
+    if (result == -1) {
+        if(errno == EINTR) {
+            increaseSemaphore(sem_id, a);
+        } else {
+            perror("Blad zwiekszania wartosci na semaforze.");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+void decreaseSemaphore(int sem_id, int a) {
+    struct sembuf semOperation;
+    semOperation.sem_num = 0;
+    semOperation.sem_op = -a;
+    semOperation.sem_flg = 0;
+    int result = semop(sem_id, &semOperation, 1);
+    if (result == -1) {
+        if(errno == EINTR) {
+            increaseSemaphore(sem_id, a);
+        } else {
+            perror("Blad zmniejszania wartosci na semaforze.");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+void decreaseSemaphoreNowait(int sem_id, int a) {
+    struct sembuf semOperation;
+    semOperation.sem_num = 0;
+    semOperation.sem_op = -a;
+    semOperation.sem_flg = IPC_NOWAIT;
+    int result = semop(sem_id, &semOperation, 1);
+    if (result == -1) {
+        if(errno == EINTR) {
+            increaseSemaphoreNowait(sem_id, a);
+        } else if (errno == EAGAIN) {
+            return 1;
+        } else {
+            perror("Blad zmniejszania wartosci na semaforze(nowait).");
+            exit(EXIT_FAILURE);
+        }
+    }
+    return 0;
+}
+
+int semaphoreValue(int sem_id) {
+    int result = semctl(sem_id, 0, GETVAL);
+    if (result == -1)
+    {
+        perror("Blad pobrania wartosci na semaforze.");
+        exit(EXIT_FAILURE);
+    }
+    return result;
+}
+
+void init_resources() {
+    
+
+    
 
     kasa->salon_open = 1;
     kasa->tens = 10;
     kasa->twenties = 5;
     kasa->fifties = 2;
     kasa->continueFlag = 0;
+
     for (int i = 0; i < NUM_KLIENTOW; i++) {
         kasa->client_done[i] = 0;
     }    
+
     for (int i = 0; i < NUM_FOTELE; i++) {
         kasa->client_on_chair[i] = 0;  // Inicjalizacja pól client_on_chair
     }
@@ -77,16 +233,15 @@ void init_resources() {
     poczekalnia_id = semget(POCZEKALNIA_KEY, 1, IPC_CREAT | 0666);
     fotele_id = semget(FOTELE_KEY, 1, IPC_CREAT | 0666);
     fryzjer_signal_id = semget(FRYZJER_SIGNAL_KEY, 1, IPC_CREAT | 0666);
-    msg_queue_id = msgget(MSG_QUEUE_KEY, IPC_CREAT | 0666);
-    if (msg_queue_id == -1) {
-        perror("Błąd tworzenia kolejki komunikatów");
-        exit(EXIT_FAILURE);
-    }
+    
+    
+
     if (poczekalnia_id == -1 || fotele_id == -1 || fryzjer_signal_id == -1 || msg_queue_id == -1) {
         perror("Błąd tworzenia semaforów lub kolejki komunikatów");
         exit(EXIT_FAILURE);
     }
 
+    
     semctl(poczekalnia_id, 0, SETVAL, MAX_QUEUE_SIZE);
     semctl(fotele_id, 0, SETVAL, 2);
     semctl(fryzjer_signal_id, 0, SETVAL, 0);
@@ -94,9 +249,7 @@ void init_resources() {
 
 void cleanup_resources() {
     printf("[MAIN] Sprzątanie zasobów...\n");
-    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-        perror("Błąd usuwania pamięci współdzielonej");
-    }
+    
 
     if (semctl(poczekalnia_id, 0, IPC_RMID) == -1) {
         perror("Błąd usuwania semafora poczekalni");
@@ -110,9 +263,6 @@ void cleanup_resources() {
         perror("Błąd usuwania semafora fryzjera");
     }
 
-    if (msgctl(msg_queue_id, IPC_RMID, NULL) == -1) {
-        perror("Błąd usuwania kolejki komunikatów");
-    }
 
     printf("[MAIN] Zasoby zostały pomyślnie usunięte.\n");
 }
@@ -174,10 +324,13 @@ void give_change(int amount) {
 
 void close_salon(pid_t fryzjer_pids[], pid_t klient_pids[]) {
     printf("%s [SYSTEM] Godzina 18:00. Zamykanie salonu.\n", get_timestamp());
-
+    
+    semctl(SEM_KEY, 0, SETVAL, 0);
+    cleanup_resources();
+    init_resources();
     // Ustaw flagę salon_open na 0
     lock_semaphore();
-    kasa->salon_open = 0;
+    kasa->continueFlag = 1;
     unlock_semaphore();
 
     // Wyślij sygnał SIGUSR1 do wszystkich fryzjerów, aby zakończyli pracę
@@ -192,14 +345,14 @@ void close_salon(pid_t fryzjer_pids[], pid_t klient_pids[]) {
 
     // Poczekaj na zakończenie wszystkich procesów
     for (int i = 0; i < NUM_FRYZJEROW; i++) {
-        waitpid(fryzjer_pids[i], NULL, 0);
+        waitpid(fryzjer_pids[i], NULL, WNOHANG); 
     }
 
     for (int i = 0; i < NUM_KLIENTOW; i++) {
-        waitpid(klient_pids[i], NULL, 0);
+        waitpid(klient_pids[i], NULL, WNOHANG); 
     }
 
-    printf("%s [SYSTEM] Salon zamknięty. Wszystkie procesy zakończone.\n", get_timestamp());
+    printf("%s [SYSTEM] Salon zamknięty.\n", get_timestamp());
 }
 
 void open_salon(pid_t fryzjer_pids[], pid_t klient_pids[]) {
@@ -208,32 +361,33 @@ void open_salon(pid_t fryzjer_pids[], pid_t klient_pids[]) {
     // Ustaw flagę salon_open na 1
     lock_semaphore();
     kasa->salon_open = 1;
+    kasa->continueFlag = 0;
     unlock_semaphore();
 
-    // Tworzenie procesów fryzjerów
-    /*for (int i = 0; i < NUM_FRYZJEROW; i++) {
-        fryzjer_pids[i] = fork();
-        if (fryzjer_pids[i] == 0) {
-            fryzjer_handler(i + 1);
-            exit(0);
-        }
-    }
+    //  //Tworzenie procesów fryzjerów
+    // for (int i = 0; i < NUM_FRYZJEROW; i++) {
+    //     fryzjer_pids[i] = fork();
+    //     if (fryzjer_pids[i] == 0) {
+    //         fryzjer_handler(i + 1);
+    //         exit(0);
+    //     }
+    // }
 
     // Tworzenie procesu kierownika
-    pid_t kierownik_pid = fork();
+    /*pid_t kierownik_pid = fork();
     if (kierownik_pid == 0) {
         kierownik_handler(fryzjer_pids);
         exit(0);
-    }
-
-    // Tworzenie procesów klientów
-    for (int i = 0; i < NUM_KLIENTOW; i++) {
-        klient_pids[i] = fork();
-        if (klient_pids[i] == 0) {
-            klient_handler(i + 1);
-            exit(0);
-        }
-        usleep(100000); // Opóźnienie między klientami
     }*/
+
+    // // Tworzenie procesów klientów
+    // for (int i = 0; i < NUM_KLIENTOW; i++) {
+    //     klient_pids[i] = fork();
+    //     if (klient_pids[i] == 0) {
+    //         klient_handler(i + 1);
+    //         exit(0);
+    //     }
+    //     usleep(100000); // Opóźnienie między klientami
+    // }
    printf("%s [SYSTEM] Salon otwarty. Procesy wznawiają działanie.\n", get_timestamp());
 }

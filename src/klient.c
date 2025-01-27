@@ -16,7 +16,14 @@ void handle_sigusr2(int sig) {
         struct sembuf zwolnij_miejsce = {0, 1, 0};
         semop(poczekalnia_id, &zwolnij_miejsce, 1);
 
-        exit(0); // Klient natychmiast opuszcza salon
+         while (1) {
+            if (kasa->salon_open == 1) {
+                break; // Salon został otwarty, fryzjer wraca do pracy
+            }
+            sleep(1); // Czekaj 1 sekundę przed kolejnym sprawdzeniem
+        }
+        printf("%s [KLIENT %d] Salon został otwarty. Wracam do gotowania.\n", get_timestamp(), getpid());  
+        //exit(0); // Klient natychmiast opuszcza salon
     }
 }
 
@@ -38,11 +45,11 @@ void klient_handler(int client_id) {
     while (1) {
         // Sprawdź, czy salon jest otwarty
         //printf("%s [DEBUG KLIENT %d] PRZED LOCK_SEMAPHORE (SPRAWDZENIE SALONU)\n", get_timestamp(), getpid());
-        lock_semaphore();
+        //lock_semaphore();
         //printf("%s [DEBUG KLIENT %d] PO LOCK_SEMAPHORE (SPRAWDZENIE SALONU)\n", get_timestamp(), getpid());
         int salon_otwarty = kasa->salon_open;
         //printf("%s [DEBUG KLIENT %d] PRZED UNLOCK_SEMAPHORE (SPRAWDZENIE SALONU)\n", get_timestamp(), getpid());
-        unlock_semaphore();
+        //unlock_semaphore();
         //printf("%s [DEBUG KLIENT %d] PO UNLOCK_SEMAPHORE (SPRAWDZENIE SALONU)\n", get_timestamp(), getpid());
 
         if (!salon_otwarty) {
@@ -63,12 +70,13 @@ void klient_handler(int client_id) {
 
         printf("%s [KLIENT %d] Zajął miejsce w poczekalni.\n",get_timestamp(), getpid());
         enqueue(getpid());
-
+        //printf("waka waka e e");
         // Wysyłanie komunikatu do fryzjera
         struct Message message;
         message.mtype = 1; // Typ komunikatu (można dostosować do ID fryzjera)
         message.client_id = client_id;
         message.client_pid = getpid();
+        //printf("po wakawakaee");
         //printf("%s [DEBUG KLIENT %d] PRZED WYSŁANIEM KOMUNIKATU DO FRYZJERA\n", get_timestamp(), getpid());
         if (msgsnd(msg_queue_id, &message, sizeof(message) - sizeof(long), 0) == -1) {
             perror("Błąd wysyłania komunikatu do fryzjera");
@@ -78,10 +86,12 @@ void klient_handler(int client_id) {
 
         while (1) {
             //printf("%s [DEBUG KLIENT %d] PRZED LOCK_SEMAPHORE (SPRAWDZENIE FLAGI)\n", get_timestamp(), getpid());
+            //printf("lol wszedlem do while\n");
             lock_semaphore();
             //printf("%s [DEBUG KLIENT %d] PO LOCK_SEMAPHORE (SPRAWDZENIE FLAGI)\n", get_timestamp(), getpid());
             if (kasa->client_done[client_id]) { 
                     //printf("XDDDDDDDD");
+                kasa->client_done[client_id] = 0; // Ustaw flagę, że klient juz wyszedl
                 //printf("%s [DEBUG KLIENT %d] PRZED UNLOCK_SEMAPHORE W IF(SPRAWDZENIE FLAGI)\n", get_timestamp(), getpid());
                 unlock_semaphore();
                 //printf("%s [DEBUG KLIENT %d] PO UNLOCK_SEMAPHORE W IF (SPRAWDZENIE FLAGI)\n", get_timestamp(), getpid());
@@ -92,14 +102,14 @@ void klient_handler(int client_id) {
             //printf("%s [DEBUG KLIENT %d] PO UNLOCK_SEMAPHORE (SPRAWDZENIE FLAGI)\n", get_timestamp(), getpid());
             usleep(100000);
         }
-
-        printf("%s [KLIENT %d] Klient opuszcza salon po obsłudze.\n",get_timestamp(), getpid());
-
+        
         struct sembuf zwolnij_miejsce = {0, 1, 0};
         //printf("%s [DEBUG KLIENT %d] PRZED ZWOLNIENIEM MIEJSCA W POCZEKALNI\n", get_timestamp(), getpid());
         semop(poczekalnia_id, &zwolnij_miejsce, 1);
         //printf("%s [DEBUG KLIENT %d] PO ZWOLNIENIU MIEJSCA W POCZEKALNI\n", get_timestamp(), getpid());
-        sleep(1);
+        printf("%s [KLIENT %d] Klient opuszcza salon po obsłudze.\n",get_timestamp(), getpid());
+
+        usleep(1000000);
     }
 
 }

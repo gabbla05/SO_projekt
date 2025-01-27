@@ -30,9 +30,9 @@ void* zombie_collector(void* arg) {
     (void)arg; // Nieużywany argument
     while (atomic_load(&zombie_collector_running)) {
         // Wywołaj waitpid, aby zebrać procesy zombie
-        printf("%s [DEBUG ZOMBIE_COLLECTOR] PRZED WAITPID\n", get_timestamp());
+        //printf("%s [DEBUG ZOMBIE_COLLECTOR] PRZED WAITPID\n", get_timestamp());
         while (waitpid(-1, NULL, WNOHANG) > 0) {
-            printf("%s [DEBUG ZOMBIE_COLLECTOR] PROCES ZOMBIE ZEBRANY\n", get_timestamp());
+            //printf("%s [DEBUG ZOMBIE_COLLECTOR] PROCES ZOMBIE ZEBRANY\n", get_timestamp());
             // Proces zombie został zebrany
         }
         sleep(1); // Odczekaj sekundę przed kolejnym sprawdzeniem
@@ -54,7 +54,7 @@ int main() {
         perror("Błąd rejestracji SIGUSR2");
         exit(EXIT_FAILURE);
     }
-    int hour;
+    int hour = 8;
     /*printf("Podaj aktualną godzinę (8-18): ");
     int hour;
     scanf("%d", &hour);
@@ -86,15 +86,14 @@ int main() {
             fryzjer_handler(i + 1);
             exit(0);
         }
-        printf("%s twoja stara\n", get_timestamp());
     }
-
+    /*
     // Tworzenie procesu kierownika
     pid_t kierownik_pid = fork();
     if (kierownik_pid == 0) {
         kierownik_handler(fryzjer_pids);
         exit(0);
-    }
+    }*/
 
     // Tworzenie procesów klientów
     for (int i = 0; i < NUM_KLIENTOW; i++) {
@@ -103,26 +102,30 @@ int main() {
             klient_handler(i + 1);
             exit(0);
         }
-        usleep(100000); // Opóźnienie między klientami
+        usleep(10000000); // Opóźnienie między klientami
     }
 
     
 
     // Symulacja czasu
     while (1) {
-        sleep(1); // Symuluj upływ czasu (1 sekunda = 1 godzina)
+        //sleep(1); // Symuluj upływ czasu (1 sekunda = 1 godzina)
+        usleep(100000);
         hour++;
 
         // Sprawdź, czy nadszedł czas zamknięcia salonu
         if (hour >= 18) {
-            close_salon(fryzjer_pids, klient_pids);
             // Czekaj do godziny 8:00
-            printf("%s [SYSTEM] Salon zamknięty. Czekam 14 sekund (14 godzin) przed ponownym otwarciem.\n", get_timestamp());
+             lock_semaphore();
+            printf("%s [SYSTEM] Salon zamknięty. Czekam 14 sekund (14 godzin) przed ponownym otwarciem.\n", get_timestamp()); //odtad sie nie wykonuje
+           
+            close_salon(fryzjer_pids, klient_pids);
+            //printf("lol\n");
             sleep(14); // Czekaj 14 sekund (14 godzin w symulacji)
-
             // Resetuj godzinę na 8:00
             hour = 8;
             open_salon(fryzjer_pids, klient_pids);
+            unlock_semaphore();
         }
     }
     // Zatrzymaj wątek zbierający zombie
