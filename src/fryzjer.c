@@ -10,93 +10,119 @@
 
 extern int fotele_id;
 extern int fryzjer_signal_id;
-extern struct Kasa* kasa;
+extern struct SharedMemory* sharedMemory;
 
 // Funkcja obsługi sygnału SIGUSR1
-void handle_sigusr1(int sig) {
+void handle_sigusr1_hairdresser(int sig) {
     if (sig == SIGUSR1) {
         printf("%s [FRYZJER %d] Otrzymałem sygnał do wyłączenia. Kończę pracę.\n", get_timestamp(), getpid());
         exit(0); // Zakończ proces fryzjera
     }
 }
 
+void handle_sigusr2_hairdresser(int sig) {
+    if (sig == SIGUSR2) {
+        printf("%s [FRYZJER %d] Otrzymałem sygnał do przerwania obsługi.\n", get_timestamp(), getpid());
+        // Nie kończymy procesu fryzjera, tylko przerywamy obsługę
+    }
+}
+
 void fryzjer_handler(int fryzjer_id) {
     prctl(PR_SET_NAME, "fryzjer", 0, 0, 0);
     srand(getpid());
-    pid_t pid = getpid();
+
+    // Rejestracja obsługi obu sygnałów
+    struct sigaction sa1, sa2;
     
-    // Rejestracja obsługi sygnału SIGUSR1
-    struct sigaction sa;
-    sa.sa_handler = handle_sigusr1;
-    sa.sa_flags = 0;
-    sigemptyset(&sa.sa_mask);
-    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-        perror("Błąd rejestracji SIGUSR1");
-        exit(EXIT_FAILURE);
-    }
+    sa1.sa_handler = handle_sigusr1_hairdresser;
+    sa1.sa_flags = 0;
+    sigemptyset(&sa1.sa_mask);
+    sigaction(SIGUSR1, &sa1, NULL);
+
+    sa2.sa_handler = handle_sigusr2_hairdresser;
+    sa2.sa_flags = 0;
+    sigemptyset(&sa2.sa_mask);
+    sigaction(SIGUSR2, &sa2, NULL);
 
     struct Message message;
+    volatile sig_atomic_t interrupted = 0;
 
     while (1) {
         // Sprawdzenie, czy salon jest otwarty
-        lock_semaphore();
-        if (kasa->salon_open == 0) {
-            unlock_semaphore();
-            printf("%s [FRYZJER %d] Salon jest zamknięty. Kończę pracę.\n", get_timestamp(), fryzjer_id);
-            exit(0);
-        }
-        unlock_semaphore();
+        if (sharedMemory->salon_open == 0) continue;
 
         // Oczekiwanie na klienta w poczekalni
-        printf("%s [FRYZJER %d] Oczekuję na klienta w poczekalni.\n", get_timestamp(), fryzjer_id);
-        if (msgrcv(msg_queue_id, &message, sizeof(message) - sizeof(long), 1, 0) == -1) {
-            if (errno == EINTR) continue; // Ignoruj przerwania sygnałami
-            perror("[FRYZJER] Błąd odbioru komunikatu");
-            exit(EXIT_FAILURE);
+       // printf("%s [FRYZJER %d] Oczekuję na klienta w poczekalni.\n", get_timestamp(), fryzjer_id);
+
+        // Próba odbioru komunikatu z kolejki
+        if (msgrcv(msg_queue_id, &message, sizeof(message) - sizeof(long), 1, IPC_NOWAIT) == -1) {
+            if (errno == ENOMSG) {
+                usleep(100000);
+                continue;
+            }
+            // Obsługa innych błędów...
+            continue;
         }
 
         int client_id = message.client_id;
         int client_pid = message.client_pid;
-        printf("%s [FRYZJER %d] Obsługuję klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
 
-        struct sembuf zwolnij_miejsce = {0, 1, 0};
-        if (semop(poczekalnia_id, &zwolnij_miejsce, 1) == -1) {
-            perror("[FRYZJER] Błąd zwalniania miejsca w poczekalni");
-        }
-
-        // Zajęcie fotela
-        struct sembuf zajmij_fotel = {0, -1, 0};
-        while (semop(fotele_id, &zajmij_fotel, 1) == -1) {
-            if (errno == EINTR) {
-                // Operacja została przerwana przez sygnał, ponów próbę
-                continue;
-            }
-            perror("[FRYZJER] Błąd zajmowania fotela");
-            break; // Wyjdź z pętli w przypadku innych błędów
-        }
-
-        // Zaktualizuj pamięć współdzieloną: klient zajmuje fotel
+        // Obsługa klienta z możliwością przerwania
+        printf("%s [FRYZJER %d] Rozpoczynam obsługę klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
+        
         lock_semaphore();
+        // Sprawdź, czy klient nadal jest aktywny (czy nie został zmuszony do wyjścia)
+        if (kill(client_pid, 0) == -1) {
+            printf("%s [FRYZJER %d] Klient %d nie jest już dostępny.\n", get_timestamp(), fryzjer_id, client_pid);
+            unlock_semaphore();
+            continue;
+        }
+
+        // Zajmij fotel i oznacz klienta
         for (int i = 0; i < NUM_FOTELE; i++) {
-            if (kasa->client_on_chair[i] == 0) { // Znajdź wolny fotel
-                kasa->client_on_chair[i] = client_pid; // Zajmij fotel przez klienta
+            if (sharedMemory->client_on_chair[i] == 0) {
+                sharedMemory->client_on_chair[i] = client_pid;
                 break;
             }
         }
         unlock_semaphore();
 
-        printf("%s [FRYZJER %d] Zajęto fotel dla klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
-
-        // Rozpoczęcie obsługi klienta
-        printf("%s [FRYZJER %d] Rozpoczynam obsługę klienta %d.\n", get_timestamp(), fryzjer_id, client_pid);
-        usleep(rand() % 1000000 + 1000000); // Symulacja czasu obsługi
-
-        printf("hehe");
-        if(continueFlag == 1) {
-            continue;
-            printf("SRAKAXD");
+        // Symulacja strzyżenia z możliwością przerwania
+        int strzyzenie_czas = rand() % 2000000 + 2000000;
+        int czas_miniety = 0;
+        while (czas_miniety < strzyzenie_czas) {
+            usleep(100000); // Śpij krócej, by sprawdzać przerwania
+            czas_miniety += 100000;
+            
+            // Sprawdź, czy klient nadal jest dostępny
+            if (kill(client_pid, 0) == -1) {
+                interrupted = 1;
+                break;
+            }
         }
-        
+
+        // Jeśli obsługa została przerwana, wyczyść stan i kontynuuj
+        if (interrupted) {
+            printf("%s [FRYZJER %d] Obsługa klienta %d została przerwana.\n", 
+                   get_timestamp(), fryzjer_id, client_pid);
+            
+            lock_semaphore();
+            // Znajdź i zwolnij fotel klienta
+            for (int i = 0; i < NUM_FOTELE; i++) {
+                if (sharedMemory->client_on_chair[i] == client_pid) {
+                    sharedMemory->client_on_chair[i] = 0;
+                    break;
+                }
+            }
+            unlock_semaphore();
+            
+            struct sembuf zwolnij_fotel = {0, 1, 0};
+            semop(fotele_id, &zwolnij_fotel, 1);
+            
+            interrupted = 0;
+            continue;
+        }
+
         // Generowanie kosztu usługi i płatności
         int cost = (rand() % 8 + 3) * 10;
         int payment = 0, tens = 0, twenties = 0, fifties = 0;
@@ -138,8 +164,8 @@ void fryzjer_handler(int fryzjer_id) {
         // Zaktualizuj pamięć współdzieloną: klient opuszcza fotel
         lock_semaphore();
         for (int i = 0; i < NUM_FOTELE; i++) {
-            if (kasa->client_on_chair[i] == client_pid) { // Znajdź fotel zajęty przez klienta
-                kasa->client_on_chair[i] = 0; // Zwolnij fotel
+            if (sharedMemory->client_on_chair[i] == client_pid) { // Znajdź fotel zajęty przez klienta
+                sharedMemory->client_on_chair[i] = 0; // Zwolnij fotel
                 break;
             }
         }
@@ -147,7 +173,7 @@ void fryzjer_handler(int fryzjer_id) {
 
         // Oznaczenie klienta jako obsłużonego
         lock_semaphore();
-        kasa->client_done[client_id] = 1; // Ustaw flagę, że klient został obsłużony
+        sharedMemory->client_done[client_id] = 1; // Ustaw flagę, że klient został obsłużony
         unlock_semaphore();
 
         printf("%s [FRYZJER %d] Klient %d obsłużony, fotel zwolniony.\n", get_timestamp(), fryzjer_id, client_pid);

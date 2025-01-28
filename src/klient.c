@@ -10,34 +10,40 @@
 
 void handle_sigusr2(int sig) {
     if (sig == SIGUSR2) {
-        printf("%s [KLIENT %d] Otrzymałem sygnał do natychmiastowego opuszczenia salonu.\n", get_timestamp(), getpid());
-        exit(0); // Klient natychmiast opuszcza salon
+        printf("%s [KLIENT %d] Otrzymałem nakaz opuszczenia salonu.\n", get_timestamp(), getpid());
+        // Zwalniamy miejsce w poczekalni jeśli klient tam był
+        struct sembuf zwolnij_miejsce = {0, 1, 0};
+        semop(poczekalnia_id, &zwolnij_miejsce, 1);
+        exit(0);
     }
 }
 
 void klient_handler(int client_id) {
     prctl(PR_SET_NAME, "klient", 0, 0, 0);
-    srand(getpid());
-
+    
+    // Rejestracja obsługi sygnału z flagą SA_RESTART
     struct sigaction sa;
     sa.sa_handler = handle_sigusr2;
-    sa.sa_flags = 0;
+    sa.sa_flags = SA_RESTART;  // Dodajemy flagę SA_RESTART
     sigemptyset(&sa.sa_mask);
-    if (sigaction(SIGUSR2, &sa, NULL) == -1) {
-        perror("Błąd rejestracji SIGUSR2");
-        exit(EXIT_FAILURE);
-    }
+    sigaction(SIGUSR2, &sa, NULL);
     
-    usleep(rand() % 500000);
+    usleep(rand() % 800000);
 
+    // Próba zajęcia miejsca w poczekalni
     struct sembuf zajmij_miejsce = {0, -1, IPC_NOWAIT};
     if (semop(poczekalnia_id, &zajmij_miejsce, 1) == -1) {
-        printf("%s [KLIENT %d] Poczekalnia pełna, klient nie wchodzi.\n",get_timestamp(), getpid());
+        printf("%s [KLIENT %d] Poczekalnia pełna, klient nie wchodzi.\n", get_timestamp(), getpid());
         exit(0);
     }
 
-    printf("%s [KLIENT %d] Zajął miejsce w poczekalni.\n",get_timestamp(), getpid());
-    enqueue(getpid());
+    printf("%s [KLIENT %d] Zajął miejsce w poczekalni.\n", get_timestamp(), getpid());
+
+    // Dodanie klienta do kolejki
+    if (enqueue(client_id) == -1) {
+        printf("%s [KLIENT %d] Błąd dodania do kolejki, klient opuszcza salon.\n", get_timestamp(), getpid());
+        exit(0);
+    }
 
     // Wysyłanie komunikatu do fryzjera
     struct Message message;
@@ -50,10 +56,10 @@ void klient_handler(int client_id) {
         exit(EXIT_FAILURE);
     }
 
+    // Oczekiwanie na obsługę
     while (1) {
         lock_semaphore();
-        if (kasa->client_done[client_id]) { 
-            //printf("XDDDDDDDD");
+        if (sharedMemory->client_done[client_id]) {
             unlock_semaphore();
             break;
         }
@@ -61,10 +67,6 @@ void klient_handler(int client_id) {
         usleep(100000);
     }
 
-    printf("%s [KLIENT %d] Klient opuszcza salon po obsłudze.\n",get_timestamp(), getpid());
-
-    struct sembuf zwolnij_miejsce = {0, 1, 0};
-    semop(poczekalnia_id, &zwolnij_miejsce, 1);
-
+    printf("%s [KLIENT %d] Klient opuszcza salon po obsłudze.\n", get_timestamp(), getpid());
     exit(0);
 }

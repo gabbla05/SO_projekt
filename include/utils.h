@@ -10,22 +10,21 @@
 #define NUM_KLIENTOW 40
 #define MAX_QUEUE_SIZE 10
 #define NUM_FOTELE 2
-#define SHM_KEY ftok("/tmp/shmfile", 'S')
+#define SHM_KEY 3000
 #define SEM_KEY 5678
 #define POCZEKALNIA_KEY 91011
 #define FOTELE_KEY 121314
 #define FRYZJER_SIGNAL_KEY 151617
 #define MSG_QUEUE_KEY 181920
 
-
 extern int poczekalnia_id, fotele_id, fryzjer_signal_id;
 extern int msg_queue_id;
 extern struct Queue queue;
-extern struct Kasa* kasa;
+extern struct SharedMemory* sharedMemory;
 extern int continueFlag;
+extern int salonClosed;
 
-
-struct Kasa {
+struct SharedMemory {
     int salon_open;
     int tens;
     int twenties;
@@ -48,11 +47,10 @@ struct Message {
     int client_pid;
 };
 
-
 const char* get_timestamp();
 void lock_semaphore();
 void unlock_semaphore();
-void init_resources();
+int init_resources();
 void cleanup_resources();
 int enqueue(int client_id);
 int dequeue();

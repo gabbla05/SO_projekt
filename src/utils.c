@@ -15,15 +15,22 @@
 #include <string.h>
 #include <sys/time.h>
 
-int poczekalnia_id, fotele_id, fryzjer_signal_id;
-int msg_queue_id; // Define msg_queue_id
+//SEMAFORY
+int poczekalnia_id, fotele_id, fryzjer_signal_id; 
+
+//KOLEJKA KOMUNIKATOW
+int msg_queue_id; //kolejka komunikatow
+
+// KOLEJKA I PAMIEC WSPOLDZIELONA
 struct Queue queue = { .head = 0, .tail = 0, .size = 0 };
-struct Kasa* kasa;
-int shm_id; //id pam dz
+struct SharedMemory* sharedMemory;
+
+// FLAGI
+int shm_id;
 int continueFlag = 0;
+int salonClosed = 0;
 
-
-// Funkcja do generowania znacznika czasu
+// Funkcja generujaca znacznik czasu
 const char* get_timestamp() {
     static char buffer[80];
     struct timeval now;
@@ -32,13 +39,13 @@ const char* get_timestamp() {
     gettimeofday(&now, NULL);
     timeinfo = localtime(&now.tv_sec);
 
-    // Format the time with milliseconds
     strftime(buffer, sizeof(buffer), "[%Y-%m-%d %H:%M:%S", timeinfo);
     snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), ".%03ld]", now.tv_usec / 1000);
 
     return buffer;
 }
 
+//SEMAFOR PAMIECI WSPOLDZIELONEJ - FUNKCJE
 void lock_semaphore() {
     struct sembuf sops = {0, -1, 0};
     semop(SEM_KEY, &sops, 1);
@@ -49,75 +56,12 @@ void unlock_semaphore() {
     semop(SEM_KEY, &sops, 1);
 }
 
-void init_resources() {
-    shm_id = shmget(SHM_KEY, sizeof(struct Kasa), IPC_CREAT | 0666);
-    if (shm_id == -1) {
-        perror("Błąd tworzenia pamięci współdzielonej dla kasy.");
-        exit(EXIT_FAILURE);
-    }
-
-    kasa = shmat(shm_id, NULL, 0);
-    if (kasa == (void*)-1) {
-        perror("Błąd dołączania pamięci współdzielonej dla kasy");
-        exit(EXIT_FAILURE);
-    }
-
-    kasa->salon_open = 1;
-    kasa->tens = 10;
-    kasa->twenties = 5;
-    kasa->fifties = 2;
-    for (int i = 0; i < NUM_KLIENTOW; i++) {
-        kasa->client_done[i] = 0;
-    }    
-    for (int i = 0; i < NUM_FOTELE; i++) {
-        kasa->client_on_chair[i] = 0;  // Inicjalizacja pól client_on_chair
-    }
-
-    poczekalnia_id = semget(POCZEKALNIA_KEY, 1, IPC_CREAT | 0666);
-    fotele_id = semget(FOTELE_KEY, 1, IPC_CREAT | 0666);
-    fryzjer_signal_id = semget(FRYZJER_SIGNAL_KEY, 1, IPC_CREAT | 0666);
-    msg_queue_id = msgget(MSG_QUEUE_KEY, IPC_CREAT | 0666);
-
-    if (poczekalnia_id == -1 || fotele_id == -1 || fryzjer_signal_id == -1 || msg_queue_id == -1) {
-        perror("Błąd tworzenia semaforów lub kolejki komunikatów");
-        exit(EXIT_FAILURE);
-    }
-
-    semctl(poczekalnia_id, 0, SETVAL, MAX_QUEUE_SIZE);
-    semctl(fotele_id, 0, SETVAL, 2);
-    semctl(fryzjer_signal_id, 0, SETVAL, 0);
-}
-
-void cleanup_resources() {
-    printf("[MAIN] Sprzątanie zasobów...\n");
-    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-        perror("Błąd usuwania pamięci współdzielonej");
-    }
-
-    if (semctl(poczekalnia_id, 0, IPC_RMID) == -1) {
-        perror("Błąd usuwania semafora poczekalni");
-    }
-
-    /*if (semctl(fotele_id, 0, IPC_RMID) == -1) {
-        perror("Błąd usuwania semafora foteli");
-    }*/
-
-    if (semctl(fryzjer_signal_id, 0, IPC_RMID) == -1) {
-        perror("Błąd usuwania semafora fryzjera");
-    }
-
-    if (msgctl(msg_queue_id, IPC_RMID, NULL) == -1) {
-        perror("Błąd usuwania kolejki komunikatów");
-    }
-
-    printf("[MAIN] Zasoby zostały pomyślnie usunięte.\n");
-}
-
+// FUNKCJE OBSLUGUJACE STRUKTURE KOLEJKI - DO POCZEKALNI
 int enqueue(int client_id) {
     lock_semaphore();
     if (queue.size >= MAX_QUEUE_SIZE) {
         unlock_semaphore();
-        return -1;
+        return -1; // Kolejka pełna
     }
 
     queue.clients[queue.tail] = client_id;
@@ -131,7 +75,7 @@ int dequeue() {
     lock_semaphore();
     if (queue.size == 0) {
         unlock_semaphore();
-        return -1;
+        return -1; // Kolejka pusta
     }
 
     int client_id = queue.clients[queue.head];
@@ -141,25 +85,26 @@ int dequeue() {
     return client_id;
 }
 
+// FUNKCJE OBSLUGUJACE PLATNOSC
 void process_payment(int tens, int twenties, int fifties) {
     lock_semaphore();
-    kasa->tens += tens;
-    kasa->twenties += twenties;
-    kasa->fifties += fifties;
+    sharedMemory->tens += tens;
+    sharedMemory->twenties += twenties;
+    sharedMemory->fifties += fifties;
     unlock_semaphore();
 }
 
 void give_change(int amount) {
     lock_semaphore();
     while (amount > 0) {
-        if (amount >= 50 && kasa->fifties > 0) {
-            kasa->fifties--;
+        if (amount >= 50 && sharedMemory->fifties > 0) {
+            sharedMemory->fifties--;
             amount -= 50;
-        } else if (amount >= 20 && kasa->twenties > 0) {
-            kasa->twenties--;
+        } else if (amount >= 20 && sharedMemory->twenties > 0) {
+            sharedMemory->twenties--;
             amount -= 20;
-        } else if (amount >= 10 && kasa->tens > 0) {
-            kasa->tens--;
+        } else if (amount >= 10 && sharedMemory->tens > 0) {
+            sharedMemory->tens--;
             amount -= 10;
         } else {
             break;
@@ -168,3 +113,177 @@ void give_change(int amount) {
     unlock_semaphore();
 }
 
+// INICJALIZACJA ZASOBOW DLA KAZDEGO DNIA ORAZ ICH CZYSZCZENIE
+// utils.c - zaktualizowane funkcje zarządzania zasobami
+
+// Funkcja inicjalizująca pojedynczy semafor
+int initialize_semaphore(int key, int initial_value) {
+    int sem_id = semget(key, 1, IPC_CREAT | 0666);
+    if (sem_id == -1) {
+        perror("Błąd tworzenia semafora");
+        return -1;
+    }
+    
+    if (semctl(sem_id, 0, SETVAL, initial_value) == -1) {
+        perror("Błąd inicjalizacji semafora");
+        return -1;
+    }
+    
+    return sem_id;
+}
+
+// Funkcja inicjalizująca pamięć współdzieloną
+struct SharedMemory* initialize_shared_memory() {
+    // Utworzenie segmentu pamięci współdzielonej
+    shm_id = shmget(SHM_KEY, sizeof(struct SharedMemory), IPC_CREAT | 0666);
+    if (shm_id == -1) {
+        perror("Błąd tworzenia pamięci współdzielonej");
+        return NULL;
+    }
+
+    // Przyłączenie segmentu
+    struct SharedMemory* memory = (struct SharedMemory*)shmat(shm_id, NULL, 0);
+    if (memory == (void*)-1) {
+        perror("Błąd dołączania pamięci współdzielonej");
+        return NULL;
+    }
+
+    // Inicjalizacja wartości początkowych
+    memory->salon_open = 1;
+    memory->tens = 10;      // Początkowa ilość 10 zł
+    memory->twenties = 5;   // Początkowa ilość 20 zł
+    memory->fifties = 2;    // Początkowa ilość 50 zł
+
+    // Czyszczenie tablic statusu
+    memset(memory->client_done, 0, sizeof(memory->client_done));
+    memset(memory->client_on_chair, 0, sizeof(memory->client_on_chair));
+
+    return memory;
+}
+
+// Funkcja inicjalizująca kolejkę komunikatów
+int initialize_message_queue() {
+    int queue_id = msgget(MSG_QUEUE_KEY, IPC_CREAT | 0666);
+    if (queue_id == -1) {
+        perror("Błąd tworzenia kolejki komunikatów");
+        return -1;
+    }
+    return queue_id;
+}
+
+// Główna funkcja inicjalizująca wszystkie zasoby
+int init_resources() {
+    printf("%s [SYSTEM] Inicjalizacja zasobów systemowych...\n", get_timestamp());
+
+    // Inicjalizacja semaforów
+    poczekalnia_id = initialize_semaphore(POCZEKALNIA_KEY, MAX_QUEUE_SIZE);
+    fotele_id = initialize_semaphore(FOTELE_KEY, NUM_FOTELE);
+    fryzjer_signal_id = initialize_semaphore(FRYZJER_SIGNAL_KEY, 0);
+
+    if (poczekalnia_id == -1 || fotele_id == -1 || fryzjer_signal_id == -1) {
+        printf("%s [SYSTEM] Błąd podczas inicjalizacji semaforów\n", get_timestamp());
+        cleanup_resources();
+        return 0;
+    }
+
+    // Inicjalizacja pamięci współdzielonej
+    sharedMemory = initialize_shared_memory();
+    if (sharedMemory == NULL) {
+        printf("%s [SYSTEM] Błąd podczas inicjalizacji pamięci współdzielonej\n", get_timestamp());
+        cleanup_resources();
+        return 0;
+    }
+
+    // Inicjalizacja kolejki komunikatów
+    msg_queue_id = initialize_message_queue();
+    if (msg_queue_id == -1) {
+        printf("%s [SYSTEM] Błąd podczas inicjalizacji kolejki komunikatów\n", get_timestamp());
+        cleanup_resources();
+        return 0;
+    }
+
+    printf("%s [SYSTEM] Zasoby zostały zainicjalizowane pomyślnie\n", get_timestamp());
+    return 1;
+}
+
+// Funkcja czyszcząca kolejkę komunikatów
+void clear_message_queue() {
+    struct Message message;
+    while (msgrcv(msg_queue_id, &message, sizeof(message) - sizeof(long), 0, IPC_NOWAIT) != -1) {
+        // Kontynuuj usuwanie wiadomości
+    }
+}
+
+// Funkcja do odłączania pamięci współdzielonej
+void detach_shared_memory() {
+    if (sharedMemory != NULL && sharedMemory != (void*)-1) {
+        if (shmdt(sharedMemory) == -1) {
+            perror("Błąd odłączania pamięci współdzielonej");
+        }
+        sharedMemory = NULL;
+    }
+}
+
+// Funkcja czyszcząca zasoby na koniec dnia (bez usuwania IPC)
+void cleanup_daily_resources() {
+    printf("%s [SYSTEM] Czyszczenie zasobów dziennych...\n", get_timestamp());
+
+    // Czyszczenie kolejki komunikatów
+    clear_message_queue();
+
+    // Reset pamięci współdzielonej
+    if (sharedMemory != NULL) {
+        sharedMemory->salon_open = 0;
+        memset(sharedMemory->client_done, 0, sizeof(sharedMemory->client_done));
+        memset(sharedMemory->client_on_chair, 0, sizeof(sharedMemory->client_on_chair));
+    }
+
+    // Reset semaforów do wartości początkowych
+    semctl(poczekalnia_id, 0, SETVAL, MAX_QUEUE_SIZE);
+    semctl(fotele_id, 0, SETVAL, NUM_FOTELE);
+    semctl(fryzjer_signal_id, 0, SETVAL, 0);
+
+    printf("%s [SYSTEM] Zasoby dzienne zostały wyczyszczone\n", get_timestamp());
+}
+
+// Funkcja usuwająca wszystkie zasoby IPC
+void cleanup_resources() {
+    printf("%s [SYSTEM] Usuwanie wszystkich zasobów IPC...\n", get_timestamp());
+
+    // Czyszczenie kolejki komunikatów
+    if (msg_queue_id != -1) {
+        clear_message_queue();
+        if (msgctl(msg_queue_id, IPC_RMID, NULL) == -1) {
+            perror("Błąd usuwania kolejki komunikatów");
+        }
+    }
+
+    // Odłączenie i usunięcie pamięci współdzielonej
+    detach_shared_memory();
+    if (shm_id != -1) {
+        if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+            perror("Błąd usuwania pamięci współdzielonej");
+        }
+    }
+
+    // Usunięcie semaforów
+    if (poczekalnia_id != -1) {
+        if (semctl(poczekalnia_id, 0, IPC_RMID) == -1) {
+            perror("Błąd usuwania semafora poczekalni");
+        }
+    }
+    
+    if (fotele_id != -1) {
+        if (semctl(fotele_id, 0, IPC_RMID) == -1) {
+            perror("Błąd usuwania semafora foteli");
+        }
+    }
+    
+    if (fryzjer_signal_id != -1) {
+        if (semctl(fryzjer_signal_id, 0, IPC_RMID) == -1) {
+            perror("Błąd usuwania semafora sygnałów fryzjera");
+        }
+    }
+
+    printf("%s [SYSTEM] Wszystkie zasoby IPC zostały usunięte\n", get_timestamp());
+}
