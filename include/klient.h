@@ -5,5 +5,6 @@
 #define _XOPEN_SOURCE 500
 
 void klient_handler(int client_id);
+void handleSignal2(int sig) ;
 
 #endif

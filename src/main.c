@@ -30,9 +30,7 @@ void* zombie_collector(void* arg) {
     (void)arg; // Nieużywany argument
     while (atomic_load(&zombie_collector_running)) {
         // Wywołaj waitpid, aby zebrać procesy zombie
-        //printf("%s [DEBUG ZOMBIE_COLLECTOR] PRZED WAITPID\n", get_timestamp());
         while (waitpid(-1, NULL, WNOHANG) > 0) {
-            //printf("%s [DEBUG ZOMBIE_COLLECTOR] PROCES ZOMBIE ZEBRANY\n", get_timestamp());
             // Proces zombie został zebrany
         }
         sleep(1); // Odczekaj sekundę przed kolejnym sprawdzeniem
@@ -45,96 +43,52 @@ int main() {
     main_process_pid = getpid();
     srand(time(NULL));
 
-    // Rejestracja obsługi sygnałów
-    struct sigaction sa;
-    sa.sa_handler = handle_signal;
-    sa.sa_flags = 0;
-    sigemptyset(&sa.sa_mask);
-    if (sigaction(SIGUSR2, &sa, NULL) == -1) {
-        perror("Błąd rejestracji SIGUSR2");
-        exit(EXIT_FAILURE);
-    }
-    int hour = 8;
-    /*printf("Podaj aktualną godzinę (8-18): ");
-    int hour;
-    scanf("%d", &hour);
-    if (hour < 8 || hour > 18) {
-        printf("Nieprawidłowa godzina. Salon działa od 8 do 18.\n");
-        exit(EXIT_FAILURE);
-    }
+    
 
-    printf("%s Salon otwarty. Symulacja od godziny %d do 18.\n", get_timestamp(), hour);*/
-
-    init_resources();
-
-    // Utwórz wątek zbierający zombie - jakos inaczej sie killuja
+    // Utwórz wątek zbierający zombie
     pthread_t zombie_thread;
     if (pthread_create(&zombie_thread, NULL, zombie_collector, NULL) != 0) {
         perror("Błąd tworzenia wątku zbierającego zombie");
         exit(EXIT_FAILURE);
     }
-    
-    pid_t fryzjer_pids[NUM_FRYZJEROW];
-    pid_t klient_pids[NUM_KLIENTOW];
 
-    // Otwórz salon na początku
-    open_salon(fryzjer_pids, klient_pids);
-    
-    for (int i = 0; i < NUM_FRYZJEROW; i++) {
-        fryzjer_pids[i] = fork();
-        if (fryzjer_pids[i] == 0) {
-            fryzjer_handler(i + 1);
-            exit(0);
-        }
-    }
-    /*
     // Tworzenie procesu kierownika
     pid_t kierownik_pid = fork();
     if (kierownik_pid == 0) {
-        kierownik_handler(fryzjer_pids);
+        // Proces potomny (kierownik)
+        kierownik_handler(NULL); // Przekazujemy NULL, ponieważ fryzjer_pids nie jest używany w kierownik_handler
         exit(0);
-    }*/
-
-    // Tworzenie procesów klientów
-    for (int i = 0; i < NUM_KLIENTOW; i++) {
-        klient_pids[i] = fork();
-        if (klient_pids[i] == 0) {
-            klient_handler(i + 1);
-            exit(0);
-        }
-        usleep(10000000); // Opóźnienie między klientami
+    } else if (kierownik_pid < 0) {
+        perror("Błąd forkowania procesu kierownika");
+        exit(EXIT_FAILURE);
     }
 
-    
-
-    // Symulacja czasu
+    // Główna pętla programu
+    int option;
     while (1) {
-        //sleep(1); // Symuluj upływ czasu (1 sekunda = 1 godzina)
-        usleep(100000);
-        hour++;
+        printf("\nWybierz opcję:\n");
+        printf("1. Zakończ program\n");
+        printf("2. Inna opcja (do zaimplementowania)\n");
+        printf("Wybierz: ");
+        scanf("%d", &option);
 
-        // Sprawdź, czy nadszedł czas zamknięcia salonu
-        if (hour >= 18) {
-            // Czekaj do godziny 8:00
-             lock_semaphore();
-            printf("%s [SYSTEM] Salon zamknięty. Czekam 14 sekund (14 godzin) przed ponownym otwarciem.\n", get_timestamp()); //odtad sie nie wykonuje
-           
-            close_salon(fryzjer_pids, klient_pids);
-            //printf("lol\n");
-            sleep(14); // Czekaj 14 sekund (14 godzin w symulacji)
-            // Resetuj godzinę na 8:00
-            hour = 8;
-            open_salon(fryzjer_pids, klient_pids);
-            unlock_semaphore();
+        switch (option) {
+            case 1:
+                printf("%s [KIEROWNIK] Kończenie programu...\n", get_timestamp());
+                endProgram(0); // Wywołanie funkcji endProgram z kodem 0
+                break;
+            case 2:
+                printf("Inna opcja (do zaimplementowania)\n");
+                break;
+            default:
+                printf("Nieprawidłowa opcja. Spróbuj ponownie.\n");
+                break;
         }
     }
-    // Zatrzymaj wątek zbierający zombie
-    atomic_store(&zombie_collector_running, 0); // Ustaw flagę na 0, aby zatrzymać wątek
-    pthread_join(zombie_thread, NULL); // Poczekaj na zakończenie wątku
 
-    printf("%s [SYSTEM] Wszystkie procesy zakończone. Zamykanie programu.\n", get_timestamp());
-
-    cleanup_resources(); // Sprzątanie zasobów po zakończeniu pracy
+    // Zakończenie wątku zbierającego zombie
+    atomic_store(&zombie_collector_running, 0);
+    pthread_join(zombie_thread, NULL);
 
     return 0;
 }
