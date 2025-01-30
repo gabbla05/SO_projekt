@@ -53,16 +53,8 @@ void increaseSemaphore(int sem_id, int a);
 void decreaseSemaphore(int sem_id, int a);
 int decreaseSemaphoreNowait(int sem_id, int a);
 int semaphoreValue(int sem_id);
-//czas
-void *timeSimulator(void *arg);
-void endTimeSimulator();
-//zasoby
-void initResources();
-void initCash(int *memory);
-void cleanResources();
 
-void waitProcesses(int a);
-void* zombie_collector(void* arg);
+const char* get_timestamp();
 
 
 #endif
