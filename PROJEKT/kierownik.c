@@ -129,14 +129,6 @@ void waitProcesses(int n) {
 	}
 }
 
-void endProgram(int signal) {
-    endTimeSimulator();
-    sendSignal1();
-    sendSignal2();
-    cleanResources();
-    exit(EXIT_SUCCESS);
-}
-
 void ctrlC(int s) {
     cleanResources();
     for (int i = 0; i < NUM_FRYZJEROW; i++) {
@@ -207,7 +199,7 @@ int main() {
             createKlient();
             break;
         case '0':
-            endProgram(0);
+            ctrlC(0);
             break;
         default:
             printf("Nie ma takiego sygnalu.\n");
