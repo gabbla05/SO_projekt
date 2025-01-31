@@ -164,18 +164,19 @@ void decreaseSemaphore(int sem_id, int a)
     int res = semop(sem_id, &sem_buff, 1);
     if (res == -1){
     // {
-    //     if (errno == EINTR)
-    //     {
-    //         decreaseSemaphore(sem_id, a);
-    //     }
-    //     else
-    //     {
+         if (errno == EINTR)
+         {
+             decreaseSemaphore(sem_id, a);
+         }
+         else
+        {
     //         perror("semop p");
     //         exit(EXIT_FAILURE);
     //     }
-    // 
+     
     perror("semop p");
     triggerSystemShutdown();
+    }
     }
 }
 
@@ -188,18 +189,19 @@ void increaseSemaphore(int sem_id, int a)
     int result = semop(sem_id, &semOperation, 1);
     if (result == -1){
     // {
-    //     if (errno == EINTR)
-    //     {
-    //         increaseSemaphore(sem_id, a);
-    //     }
-    //     else
-    //     {
+    if (errno == EINTR)
+        {
+             increaseSemaphore(sem_id, a);
+         }
+         else
+         {
     //         perror("semop v");
     //         exit(EXIT_FAILURE);
     //     }
     // }
      perror("semop v");
      triggerSystemShutdown();
+         }
     }
 }
 
@@ -212,21 +214,22 @@ int decreaseSemaphoreNowait(int sem_id, int a)
     int result = semop(sem_id, &semOperation, 1);
     if (result == -1)
     {
-        // if (errno == EAGAIN)
-        // {
-        //     return 1;
-        // }
-        // else if (errno == EINTR)
-        // {
-        //     decreaseSemaphoreNowait(sem_id, a);
-        // }
-        // else
-        // {
+         if (errno == EAGAIN)
+         {
+             return 1;
+         }
+         else if (errno == EINTR)
+        {
+             decreaseSemaphoreNowait(sem_id, a);
+         }
+         else
+         {
         //     perror("semop p nowait");
         //     exit(EXIT_FAILURE);
         // }
         perror("semop p nowait");
         triggerSystemShutdown();
+        }
     }
     return 0;
 }

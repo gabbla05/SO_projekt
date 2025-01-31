@@ -48,6 +48,7 @@
         "pthread.h": "c",
         "string.h": "c",
         "stdatomic.h": "c",
-        "prctl.h": "c"
+        "prctl.h": "c",
+        "signal.h": "c"
     }
 }
