@@ -5,7 +5,7 @@ int hour = 8;
 
 //pthread_t keyboardThread;
 pthread_t timeSimulation; 
-//xass
+
 pid_t klient_pids[NUM_KLIENTOW];
 pid_t fryzjer_pids[NUM_FRYZJEROW];
 
@@ -79,7 +79,7 @@ void createKlient() {
 
 void *timeSimulator(void *arg) {
     while (1) {
-        sleep(10); //ten sleep jest konieczny zeby salon mogl sie otworzyc
+        sleep(5); //ten sleep jest konieczny zeby salon mogl sie otworzyc
         hour++;
         if (hour == 8) {
             printf("%s [KIEROWNIK] Godzina 8:00. Salon zostal otwarty.\n", get_timestamp());
@@ -144,12 +144,33 @@ void ctrlC(int s) {
     exit(EXIT_SUCCESS);
 }
 
+void sigTermHandler(int sig) {
+    // Perform cleanup and terminate all processes
+    cleanResources();
+    for (int i = 0; i < NUM_FRYZJEROW; i++) {
+        kill(fryzjer_pids[i], SIGKILL);
+    }
+    for (int i = 0; i < NUM_KLIENTOW; i++) {
+        kill(klient_pids[i], SIGKILL);
+    }
+    waitProcesses(NUM_FRYZJEROW);
+    waitProcesses(NUM_KLIENTOW);
+    endTimeSimulator();
+    exit(EXIT_FAILURE);
+}
+
 int main() {
+      if (signal(SIGTERM, sigTermHandler) == SIG_ERR) {
+        perror("Błąd obsługi sygnału SIGTERM");
+        exit(EXIT_FAILURE);
+    }
     if (signal(SIGINT, ctrlC) == SIG_ERR)
     {
         perror("Blad obslugi sygnalu");
         exit(EXIT_FAILURE);
     }
+
+    kierownik_pid = getpid();
     
     processesLimit();
     srand(time(NULL));

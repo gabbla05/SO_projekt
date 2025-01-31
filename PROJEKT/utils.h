@@ -32,6 +32,11 @@ struct message
     unsigned int message[MONEY];
 };
 
+extern pid_t kierownik_pid;
+
+extern int systemErrorOccurred;
+void triggerSystemShutdown();
+
 int createMessageQueue(key_t key);
 void deleteMessageQueue(int msg_queue_id);
 void recieveMessage(int msg_queue_id, struct message* msg, long receiver);

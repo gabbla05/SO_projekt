@@ -17,6 +17,16 @@
 
 //12ss
 
+// Add to utils.c
+int systemErrorOccurred = 0;
+pid_t kierownik_pid = 0;
+
+void triggerSystemShutdown() {
+    systemErrorOccurred = 1;
+    // Send signal to kierownik to initiate system-wide shutdown
+    kill(kierownik_pid, SIGTERM);
+}
+
 // FUNKCJE DO KOLEJKI KOMUNIKATOW ===========================================================================
 int createMessageQueue(key_t key)
 {
@@ -152,17 +162,20 @@ void decreaseSemaphore(int sem_id, int a)
     sem_buff.sem_op = -a;
     sem_buff.sem_flg = 0;
     int res = semop(sem_id, &sem_buff, 1);
-    if (res == -1)
-    {
-        if (errno == EINTR)
-        {
-            decreaseSemaphore(sem_id, a);
-        }
-        else
-        {
-            perror("semop p");
-            exit(EXIT_FAILURE);
-        }
+    if (res == -1){
+    // {
+    //     if (errno == EINTR)
+    //     {
+    //         decreaseSemaphore(sem_id, a);
+    //     }
+    //     else
+    //     {
+    //         perror("semop p");
+    //         exit(EXIT_FAILURE);
+    //     }
+    // 
+    perror("semop p");
+    triggerSystemShutdown();
     }
 }
 
@@ -173,17 +186,20 @@ void increaseSemaphore(int sem_id, int a)
     semOperation.sem_op = a;
     semOperation.sem_flg = 0;
     int result = semop(sem_id, &semOperation, 1);
-    if (result == -1)
-    {
-        if (errno == EINTR)
-        {
-            increaseSemaphore(sem_id, a);
-        }
-        else
-        {
-            perror("semop v");
-            exit(EXIT_FAILURE);
-        }
+    if (result == -1){
+    // {
+    //     if (errno == EINTR)
+    //     {
+    //         increaseSemaphore(sem_id, a);
+    //     }
+    //     else
+    //     {
+    //         perror("semop v");
+    //         exit(EXIT_FAILURE);
+    //     }
+    // }
+     perror("semop v");
+     triggerSystemShutdown();
     }
 }
 
@@ -196,19 +212,21 @@ int decreaseSemaphoreNowait(int sem_id, int a)
     int result = semop(sem_id, &semOperation, 1);
     if (result == -1)
     {
-        if (errno == EAGAIN)
-        {
-            return 1;
-        }
-        else if (errno == EINTR)
-        {
-            decreaseSemaphoreNowait(sem_id, a);
-        }
-        else
-        {
-            perror("semop p nowait");
-            exit(EXIT_FAILURE);
-        }
+        // if (errno == EAGAIN)
+        // {
+        //     return 1;
+        // }
+        // else if (errno == EINTR)
+        // {
+        //     decreaseSemaphoreNowait(sem_id, a);
+        // }
+        // else
+        // {
+        //     perror("semop p nowait");
+        //     exit(EXIT_FAILURE);
+        // }
+        perror("semop p nowait");
+        triggerSystemShutdown();
     }
     return 0;
 }
@@ -218,7 +236,7 @@ int semaphoreValue(int sem_id) {
     if (result == -1)
     {
         perror("semctl GETVAL");
-        exit(EXIT_FAILURE);
+         triggerSystemShutdown();
     }
     return result;
 }
@@ -237,11 +255,3 @@ const char* get_timestamp() {
 
     return buffer;
 }
-
-
-
-
-
-
-
-
