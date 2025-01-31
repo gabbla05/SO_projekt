@@ -30,7 +30,7 @@ void handleSignal1(int sig) {
         }
     } else {
         cleanResourcesFryzjer();
-        printf("%s [FRYZJER %ld]: Koncze prace.\n",get_timestamp(), fryzjer_id);
+        printf("%s [FRYZJER %ld]: Koncze prace.\n",get_timestamp(), fryzjer_id);    
         exit(EXIT_SUCCESS);
     }
     
@@ -54,6 +54,8 @@ void displayCashState(int *memory) {
 int  main() {
     srand(time(NULL));
     fryzjer_id = getpid();
+
+
     if (signal(SIGHUP, handleSignal1) == SIG_ERR)
     {
         perror("Blad sygnalu 1");
@@ -135,17 +137,22 @@ int  main() {
 
         msg.mtype = client_id;
         msg.pid = fryzjer_id;
+
+        int paid10 = msg.message[0];
+        int paid20 = msg.message[1];
+        int paid50 = msg.message[2];
+
         msg.message[0] = 0;
         msg.message[1] = 0;
         msg.message[2] = 0;
 
-        int change = (msg.message[0] * 10) + (msg.message[1] * 20) + (msg.message[2] * 50) - cost;
+        int change = (paid10 * 10) + (paid20 * 20) + (paid50 * 50) - cost;
 
         if (change) {
             decreaseSemaphore(kasa, 1);
             cashOccupied = 1;
             
-            // pamiec[0] = 0; 
+            //memory[0] = 0; 
             
             while (change > 0) { 
                 if (memory[2] > 0 && change >= 50) {
@@ -190,4 +197,3 @@ int  main() {
     cleanResourcesFryzjer();
     printf("%s [FRYZJER %ld]: Koncze prace.\n",get_timestamp(), fryzjer_id);
 }
-

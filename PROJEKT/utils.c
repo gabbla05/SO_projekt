@@ -15,7 +15,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-
+//12ss
 
 // FUNKCJE DO KOLEJKI KOMUNIKATOW ===========================================================================
 int createMessageQueue(key_t key)

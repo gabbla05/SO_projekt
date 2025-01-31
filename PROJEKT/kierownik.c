@@ -1,10 +1,11 @@
 #include "kierownik.h"
+#include "utils.h"
 
 int hour = 8;          
 
 //pthread_t keyboardThread;
 pthread_t timeSimulation; 
-
+//xass
 pid_t klient_pids[NUM_KLIENTOW];
 pid_t fryzjer_pids[NUM_FRYZJEROW];
 
@@ -78,7 +79,7 @@ void createKlient() {
 
 void *timeSimulator(void *arg) {
     while (1) {
-        sleep(10);
+        sleep(10); //ten sleep jest konieczny zeby salon mogl sie otworzyc
         hour++;
         if (hour == 8) {
             printf("%s [KIEROWNIK] Godzina 8:00. Salon zostal otwarty.\n", get_timestamp());

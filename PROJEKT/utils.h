@@ -14,7 +14,7 @@
 #define NUM_FRYZJEROW 3
 #define NUM_KLIENTOW 10
 #define MAX_QUEUE_SIZE 3
-#define NUM_FOTELE 2   
+#define NUM_FOTELE 2  
 #define MONEY 3                                         
 #define MESSAGE_P 1                 
 #define SERVICE_TIME 2 

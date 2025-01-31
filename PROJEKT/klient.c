@@ -115,6 +115,7 @@ int main() {
 
             msg.mtype = fryzjer_id;
             msg.pid = client_id;
+            
             msg.message[0] = 0;
             msg.message[1] = 0;
             msg.message[2] = 0;
