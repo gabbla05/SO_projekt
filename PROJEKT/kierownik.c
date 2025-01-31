@@ -18,7 +18,7 @@ int messageQueue;
 int sharedMemoryId; 
 int *memory; 
 
-void sprawdz_limit_procesow() {
+void processesLimit() {
     struct rlimit rl;
     
     if (getrlimit(RLIMIT_NPROC, &rl) != 0) {
@@ -91,7 +91,7 @@ void *timeSimulator(void *arg) {
         else if (hour == 24) {
             hour = 0;
         }
-        printf("%s [KIEROWNIK] Jest godzina %d.\n", hour);
+        printf("%s [KIEROWNIK] Jest godzina %d.\n", get_timestamp(), hour);
     }
     return NULL;
 }
@@ -158,7 +158,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
     
-    sprawdz_limit_procesow();
+    processesLimit();
     srand(time(NULL));
 
     key_t key;
